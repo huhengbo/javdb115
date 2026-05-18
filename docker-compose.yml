@@ -1,0 +1,14 @@
+services:
+  javdb115:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      APP_ADMIN_USERNAME: "${APP_ADMIN_USERNAME:-admin}"
+      APP_ADMIN_PASSWORD: "${APP_ADMIN_PASSWORD:?set APP_ADMIN_PASSWORD}"
+      APP_SECRET_KEY: "${APP_SECRET_KEY:?set APP_SECRET_KEY}"
+      APP_DATABASE_PATH: "/data/app.sqlite3"
+      APP_SESSION_TTL_HOURS: "${APP_SESSION_TTL_HOURS:-24}"
+      APP_ACTOR_MOVIE_CHECK_LIMIT: "${APP_ACTOR_MOVIE_CHECK_LIMIT:-3}"
+    volumes:
+      - ./data:/data

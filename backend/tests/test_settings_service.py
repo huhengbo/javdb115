@@ -1,0 +1,204 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from app.adapters.telegram import TelegramBotInfo
+from app.database import Database
+from app.errors import ValidationAppError
+from app.repositories.settings import SettingsRepository
+from app.services.notifier import NotificationService
+from app.services.settings import (
+    DEFAULT_CHECK_CRON,
+    DEFAULT_FILTER_RULES_JSON,
+    SettingsService,
+)
+from app.services.telegram_commands import TelegramCommandService
+
+
+def test_public_settings_include_defaults_and_hide_obsolete_keys(tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("javdb_base_url", "https://javdb.com", False)
+    repository.upsert("javdb_cookie", "old-cookie", True)
+
+    settings = by_key(SettingsService(repository).list_public())
+
+    assert settings["check_cron"]["value"] == DEFAULT_CHECK_CRON
+    assert settings["filter_rules"]["value"] == DEFAULT_FILTER_RULES_JSON
+    assert "javdb_base_url" not in settings
+    assert "javdb_cookie" not in settings
+
+
+def test_public_settings_reveal_p115_cookie(tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("p115_cookie", "UID=abc;", True)
+
+    settings = by_key(SettingsService(repository).list_public())
+
+    assert settings["p115_cookie"]["value"] == "UID=abc;"
+
+
+def test_update_ignores_obsolete_javdb_settings(tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+
+    SettingsService(repository).update(
+        [
+            ("javdb_base_url", "https://javdb.com", False),
+            ("check_cron", "0 */6 * * *", False),
+        ]
+    )
+
+    assert repository.get("javdb_base_url") is None
+    assert repository.get("check_cron") == "0 */6 * * *"
+
+
+def test_telegram_test_requires_saved_settings(tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+
+    try:
+        NotificationService(SettingsRepository(connection)).send_test()
+    except ValidationAppError as exc:
+        assert exc.message == "Telegram Bot Token 不能为空"
+    else:
+        raise AssertionError("missing Telegram settings should fail")
+
+
+def test_telegram_test_verifies_saved_token_and_configures_commands(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("telegram_bot_token", "bot-token", True)
+    calls: list[str] = []
+
+    class FakeTelegramBotVerifier:
+        def __init__(self, bot_token: str) -> None:
+            assert bot_token == "bot-token"
+
+        def get_me(self) -> TelegramBotInfo:
+            calls.append("get_me")
+            return TelegramBotInfo(id=1, first_name="JavDB115", username="javdb115_bot")
+
+        def set_commands(self) -> None:
+            calls.append("set_commands")
+
+    monkeypatch.setattr("app.services.notifier.TelegramBotVerifier", FakeTelegramBotVerifier)
+
+    message = NotificationService(repository).send_test()
+
+    assert message == "Telegram Bot 连接正常：@javdb115_bot"
+    assert calls == ["get_me", "set_commands"]
+
+
+def test_telegram_test_can_use_custom_success_message(monkeypatch, tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("telegram_bot_token", "bot-token", True)
+
+    class FakeTelegramBotVerifier:
+        def __init__(self, bot_token: str) -> None:
+            assert bot_token == "bot-token"
+
+        def get_me(self) -> TelegramBotInfo:
+            return TelegramBotInfo(id=1, first_name="JavDB115", username=None)
+
+        def set_commands(self) -> None:
+            return None
+
+    monkeypatch.setattr("app.services.notifier.TelegramBotVerifier", FakeTelegramBotVerifier)
+
+    assert NotificationService(repository).send_test("连接正常") == "连接正常"
+
+
+def test_telegram_commands_bind_start_and_save_offset(monkeypatch, tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("telegram_bot_token", "bot-token", True)
+    sent: list[tuple[str, str]] = []
+    commands_configured: list[bool] = []
+
+    class FakeTelegramBotVerifier:
+        def __init__(self, bot_token: str) -> None:
+            assert bot_token == "bot-token"
+
+        def set_commands(self) -> None:
+            commands_configured.append(True)
+
+        def get_updates(self, offset: int | None = None) -> list[dict]:
+            assert offset is None
+            return [
+                {
+                    "update_id": 9,
+                    "message": {"chat": {"id": 123}, "text": "/start"},
+                }
+            ]
+
+        def send_message(self, chat_id: str, text: str) -> None:
+            sent.append((chat_id, text))
+
+    monkeypatch.setattr(
+        "app.services.telegram_commands.TelegramBotVerifier",
+        FakeTelegramBotVerifier,
+    )
+
+    TelegramCommandService(repository, lambda: "状态", lambda: None).poll()
+
+    assert commands_configured == [True]
+    assert repository.get("telegram_chat_id") == "123"
+    assert repository.get("telegram_last_update_id") == "9"
+    assert sent[0][0] == "123"
+    assert "已绑定当前会话" in sent[0][1]
+
+
+def test_telegram_commands_status_and_check(monkeypatch, tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("telegram_bot_token", "bot-token", True)
+    repository.upsert("telegram_last_update_id", "9", False)
+    sent: list[tuple[str, str]] = []
+    checked: list[bool] = []
+
+    class FakeTelegramBotVerifier:
+        def __init__(self, bot_token: str) -> None:
+            assert bot_token == "bot-token"
+
+        def set_commands(self) -> None:
+            return None
+
+        def get_updates(self, offset: int | None = None) -> list[dict]:
+            assert offset == 10
+            return [
+                {"update_id": 10, "message": {"chat": {"id": "abc"}, "text": "/status"}},
+                {"update_id": 11, "message": {"chat": {"id": "abc"}, "text": "/check"}},
+            ]
+
+        def send_message(self, chat_id: str, text: str) -> None:
+            sent.append((chat_id, text))
+
+    monkeypatch.setattr(
+        "app.services.telegram_commands.TelegramBotVerifier",
+        FakeTelegramBotVerifier,
+    )
+
+    TelegramCommandService(repository, lambda: "系统正常", lambda: checked.append(True)).poll()
+
+    assert checked == [True]
+    assert repository.get("telegram_last_update_id") == "11"
+    assert sent == [
+        ("abc", "系统正常"),
+        ("abc", "已开始检查演员订阅。"),
+        ("abc", "演员订阅检查完成。"),
+    ]
+
+
+def by_key(items: list[dict[str, object]]) -> dict[str, dict[str, object]]:
+    return {str(item["key"]): item for item in items}
+
+
+def setup_database(tmp_path: Path) -> Database:
+    database = Database(tmp_path / "test.sqlite3")
+    database.initialize()
+    return database
