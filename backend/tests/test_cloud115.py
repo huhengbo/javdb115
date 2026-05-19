@@ -64,6 +64,21 @@ class OfflineP115Client(FakeP115Client):
         }
 
 
+class DuplicateOfflineP115Client(FakeP115Client):
+    def offline_add_url(self, payload: dict[str, Any]) -> dict[str, Any]:
+        assert payload == {
+            "url": "magnet:?xt=urn:btih:dup-hash",
+            "wp_path_id": "target-dir",
+            "savepath": "ABC-123",
+        }
+        return {
+            "state": False,
+            "errcode": 10008,
+            "error_msg": "任务已存在，请勿输入重复的链接地址",
+            "data": {"info_hash": "dup-hash"},
+        }
+
+
 class FakeCloudClient(P115CloudClient):
     def _new_client(self, _: str) -> FakeP115Client:
         self.fake_client = FakeP115Client()
@@ -78,6 +93,11 @@ class InvalidCloudClient(P115CloudClient):
 class OfflineCloudClient(P115CloudClient):
     def _new_client(self, _: str) -> OfflineP115Client:
         return OfflineP115Client()
+
+
+class DuplicateOfflineCloudClient(P115CloudClient):
+    def _new_client(self, _: str) -> DuplicateOfflineP115Client:
+        return DuplicateOfflineP115Client()
 
 
 def test_account_info_maps_user_and_space_fields() -> None:
@@ -108,6 +128,16 @@ def test_get_offline_tasks_maps_remote_statuses() -> None:
     assert tasks["done-hash"].source_dir_id == "dir-1"
     assert tasks["bad-hash"].status == "failed"
     assert tasks["bad-hash"].message == "资源失效"
+
+
+def test_add_offline_url_reuses_existing_task_hash() -> None:
+    task_id = DuplicateOfflineCloudClient("cookie").add_offline_url(
+        "magnet:?xt=urn:btih:dup-hash",
+        "target-dir",
+        savepath="ABC-123",
+    )
+
+    assert task_id == "dup-hash"
 
 
 def test_upload_bytes_uses_115_upload_file() -> None:

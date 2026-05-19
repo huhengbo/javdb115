@@ -26,6 +26,7 @@ OFFLINE_STATUS_QUERIES = (
     (9, "failed"),
     (11, "completed"),
 )
+OFFLINE_DUPLICATE_ERRCODE = 10008
 
 
 class Cloud115Client:
@@ -200,8 +201,24 @@ class P115CloudClient(Cloud115Client):
 
     def _raise_if_response_failed(self, method_name: str, result: Any) -> None:
         if isinstance(result, dict) and result.get("state") is False:
+            if self._is_existing_offline_task(method_name, result):
+                return
             message = result.get("error") or result.get("message") or "115 cookie is invalid"
             raise IntegrationError(f"115 API call failed at {method_name}: {message}")
+
+    def _is_existing_offline_task(self, method_name: str, result: dict[str, Any]) -> bool:
+        return (
+            method_name == "offline_add_url"
+            and self._error_code(result) == OFFLINE_DUPLICATE_ERRCODE
+            and self._first_present(result, ["info_hash"]) is not None
+        )
+
+    def _error_code(self, result: dict[str, Any]) -> int | None:
+        raw_code = result.get("errcode")
+        data = result.get("data")
+        if raw_code is None and isinstance(data, dict):
+            raw_code = data.get("errcode")
+        return to_int(raw_code)
 
     def _response_data(self, result: Any) -> dict[str, Any]:
         if not isinstance(result, dict):
