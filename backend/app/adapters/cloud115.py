@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 from app.adapters.cloud115_types import (
@@ -59,6 +60,9 @@ class Cloud115Client:
         raise NotImplementedError
 
     def delete(self, file_ids: list[str]) -> None:
+        raise NotImplementedError
+
+    def upload_bytes(self, parent_id: str, filename: str, content: bytes) -> None:
         raise NotImplementedError
 
 
@@ -146,6 +150,13 @@ class P115CloudClient(Cloud115Client):
     def delete(self, file_ids: list[str]) -> None:
         payload = {f"fid[{index}]": file_id for index, file_id in enumerate(file_ids)}
         self._call("fs_delete", payload)
+
+    def upload_bytes(self, parent_id: str, filename: str, content: bytes) -> None:
+        with NamedTemporaryFile() as file:
+            file.write(content)
+            file.flush()
+            result = self.client.upload_file(file.name, parent_id, filename=filename)
+        self._raise_if_response_failed("upload_file", result)
 
     def _iter_offline_items(self, remote_stat: int) -> Iterator[dict[str, Any]]:
         page = 1

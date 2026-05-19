@@ -9,6 +9,9 @@ from app.errors import IntegrationError
 
 
 class FakeP115Client:
+    def __init__(self) -> None:
+        self.uploaded: tuple[str, str, str] | None = None
+
     def user_info(self, payload: dict[str, Any]) -> dict[str, Any]:
         assert payload == {"uid": "123"}
         return {
@@ -35,6 +38,10 @@ class FakeP115Client:
             },
         }
 
+    def upload_file(self, path: str, parent_id: str, *, filename: str) -> dict[str, Any]:
+        self.uploaded = (path, parent_id, filename)
+        return {"state": True, "file_id": "uploaded"}
+
 
 class InvalidP115Client(FakeP115Client):
     def user_info(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -59,7 +66,8 @@ class OfflineP115Client(FakeP115Client):
 
 class FakeCloudClient(P115CloudClient):
     def _new_client(self, _: str) -> FakeP115Client:
-        return FakeP115Client()
+        self.fake_client = FakeP115Client()
+        return self.fake_client
 
 
 class InvalidCloudClient(P115CloudClient):
@@ -100,3 +108,14 @@ def test_get_offline_tasks_maps_remote_statuses() -> None:
     assert tasks["done-hash"].source_dir_id == "dir-1"
     assert tasks["bad-hash"].status == "failed"
     assert tasks["bad-hash"].message == "资源失效"
+
+
+def test_upload_bytes_uses_115_upload_file() -> None:
+    client = FakeCloudClient("cookie")
+
+    client.upload_bytes("parent-dir", "movie.nfo", b"metadata")
+
+    assert client.fake_client.uploaded is not None
+    _, parent_id, filename = client.fake_client.uploaded
+    assert parent_id == "parent-dir"
+    assert filename == "movie.nfo"

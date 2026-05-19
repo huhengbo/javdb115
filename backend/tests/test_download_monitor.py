@@ -20,9 +20,10 @@ from app.services.organizer import CloudOrganizer
 
 class CompletedCloud:
     def __init__(self) -> None:
-        self.renamed: tuple[str, str] | None = None
+        self.renamed: list[tuple[str, str]] = []
         self.moved: tuple[list[str], str] | None = None
         self.deleted: list[str] = []
+        self.uploaded: list[tuple[str, str, bytes]] = []
 
     def get_offline_tasks(self, task_ids: set[str]) -> dict[str, CloudOfflineTask]:
         assert task_ids == {"done-hash"}
@@ -48,13 +49,16 @@ class CompletedCloud:
         return "target-dir"
 
     def rename(self, file_id: str, name: str) -> None:
-        self.renamed = (file_id, name)
+        self.renamed.append((file_id, name))
 
     def move(self, file_ids: list[str], target_dir_id: str) -> None:
         self.moved = (file_ids, target_dir_id)
 
     def delete(self, file_ids: list[str]) -> None:
         self.deleted.extend(file_ids)
+
+    def upload_bytes(self, parent_id: str, filename: str, content: bytes) -> None:
+        self.uploaded.append((parent_id, filename, content))
 
 
 class FailedCloud:
@@ -123,9 +127,14 @@ def test_monitor_organizes_completed_task(monkeypatch: MonkeyPatch, tmp_path: Pa
     assert task["cloud_file_id"] == "target-dir"
     assert task["cloud_file_name"] == "ABC-123"
     assert task["work"]["status"] == "completed"
-    assert cloud.renamed == ("main-video", "ABC-123.mkv")
+    assert cloud.renamed == [
+        ("main-video", "ABC-123.mkv"),
+        ("subtitle", "ABC-123.srt"),
+    ]
     assert cloud.moved == (["main-video", "subtitle"], "target-dir")
     assert cloud.deleted == ["small-video", "source-dir"]
+    assert cloud.uploaded[0][0:2] == ("target-dir", "ABC-123.nfo")
+    assert b"<title>Sample</title>" in cloud.uploaded[0][2]
     assert logs[0]["stage"] == "115_organized"
 
 

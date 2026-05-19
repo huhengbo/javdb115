@@ -13,6 +13,7 @@ from app.repositories.settings import SettingsRepository
 from app.repositories.task_events import TaskEventsRepository
 from app.repositories.tasks import TasksRepository
 from app.services.cloud import CloudServiceFactory
+from app.services.emby_metadata import EmbyMovieMetadata
 from app.services.notifier import NotificationService
 from app.services.organizer import CloudOrganizer
 from app.services.task_state import TaskStateService, TaskTransition
@@ -110,6 +111,7 @@ class DownloadMonitorService:
                 str(remote.source_dir_id),
                 self.settings.require("p115_completed_dir_id"),
                 str(work["code"]),
+                self._metadata(work),
             )
         except Exception as exc:
             self._mark_organize_failed(task, exc)
@@ -189,6 +191,16 @@ class DownloadMonitorService:
             source_url=str(work["source_url"]),
             actors=cast(list[str], work.get("actors") or []),
             magnets=[],
+        )
+
+    def _metadata(self, work: dict[str, Any]) -> EmbyMovieMetadata:
+        return EmbyMovieMetadata(
+            code=str(work["code"]),
+            title=cast(str | None, work.get("title")),
+            release_date=cast(str | None, work.get("release_date")),
+            source_url=str(work["source_url"]),
+            actors=cast(list[str], work.get("actors") or []),
+            cover_url=cast(str | None, work.get("cover_url")),
         )
 
     def _log_context(self, task: dict[str, Any]) -> dict[str, object]:
