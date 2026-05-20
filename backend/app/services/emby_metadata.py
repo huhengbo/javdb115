@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import PurePosixPath
-from urllib.parse import urlparse
+from io import BytesIO
 from xml.etree import ElementTree
 
 import httpx
+from PIL import Image
 
 from app.media_urls import external_image_url
 
@@ -13,12 +13,6 @@ IMAGE_TIMEOUT_SECONDS = 20
 IMAGE_HEADERS = {
     "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
     "User-Agent": "Mozilla/5.0 javdb115/1.0",
-}
-IMAGE_EXTENSIONS_BY_TYPE = {
-    "image/jpeg": ".jpg",
-    "image/jpg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
 }
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 BASE_TAGS = ("JavDB",)
@@ -103,15 +97,28 @@ class EmbyMetadataBuilder:
             return []
         image_url = external_image_url(cover_url) or cover_url
         image = self._download_image(image_url)
-        extension = self._image_extension(
-            image_url,
-            image.headers.get("content-type"),
-            image.content,
-        )
+        fanart = self._jpeg_bytes(image.content)
+        poster = self._right_half_jpeg_bytes(image.content)
         return [
-            MetadataAsset(f"poster{extension}", image.content),
-            MetadataAsset(f"folder{extension}", image.content),
+            MetadataAsset("fanart.jpg", fanart),
+            MetadataAsset("landscape.jpg", fanart),
+            MetadataAsset("poster.jpg", poster),
         ]
+
+    def _jpeg_bytes(self, content: bytes) -> bytes:
+        with Image.open(BytesIO(content)) as image:
+            return self._encode_jpeg(image)
+
+    def _right_half_jpeg_bytes(self, content: bytes) -> bytes:
+        with Image.open(BytesIO(content)) as image:
+            left = image.width // 2 if image.width > 1 else 0
+            right_half = image.crop((left, 0, image.width, image.height))
+            return self._encode_jpeg(right_half)
+
+    def _encode_jpeg(self, image: Image.Image) -> bytes:
+        output = BytesIO()
+        image.convert("RGB").save(output, format="JPEG", quality=95)
+        return output.getvalue()
 
     def _download_image(self, url: str) -> httpx.Response:
         response = httpx.get(
@@ -126,18 +133,6 @@ class EmbyMetadataBuilder:
         if self._image_signature_extension(response.content) is None:
             raise ValueError(f"metadata image was not a supported image: {url}")
         return response
-
-    def _image_extension(self, url: str, content_type: str | None, content: bytes) -> str:
-        signature_extension = self._image_signature_extension(content)
-        if signature_extension:
-            return signature_extension
-        media_type = (content_type or "").split(";", 1)[0].strip().lower()
-        if media_type in IMAGE_EXTENSIONS_BY_TYPE:
-            return IMAGE_EXTENSIONS_BY_TYPE[media_type]
-        suffix = PurePosixPath(urlparse(url).path).suffix.lower()
-        if suffix in IMAGE_EXTENSIONS_BY_TYPE.values():
-            return suffix
-        return ".jpg"
 
     def _image_signature_extension(self, content: bytes) -> str | None:
         if content.startswith(b"\xff\xd8\xff"):

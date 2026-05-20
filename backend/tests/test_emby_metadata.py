@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from io import BytesIO
+from typing import cast
 
 import pytest
+from PIL import Image
 from pytest import MonkeyPatch
 
 from app.services.emby_metadata import EmbyMetadataBuilder, EmbyMovieMetadata
@@ -81,11 +84,11 @@ def test_metadata_builder_deduplicates_tags() -> None:
     assert "<tag>自定义</tag>" in content
 
 
-def test_metadata_builder_creates_poster_and_folder_assets(
+def test_metadata_builder_creates_emby_image_assets(
     monkeypatch: MonkeyPatch,
 ) -> None:
     def fake_get(*_: object, **__: object) -> FakeImageResponse:
-        return FakeImageResponse(b"\xff\xd8\xffimage-bytes", {"content-type": "image/jpeg"})
+        return FakeImageResponse(two_panel_jpeg(), {"content-type": "image/jpeg"})
 
     monkeypatch.setattr("app.services.emby_metadata.httpx.get", fake_get)
 
@@ -102,10 +105,14 @@ def test_metadata_builder_creates_poster_and_folder_assets(
 
     assert [asset.name for asset in assets] == [
         "ABC-123.nfo",
+        "fanart.jpg",
+        "landscape.jpg",
         "poster.jpg",
-        "folder.jpg",
     ]
-    assert assets[1].content == b"\xff\xd8\xffimage-bytes"
+    assert jpeg_size(assets[1].content) == (4, 2)
+    assert jpeg_size(assets[2].content) == (4, 2)
+    assert jpeg_size(assets[3].content) == (2, 2)
+    assert dominant_blue(assets[3].content)
 
 
 def test_metadata_builder_maps_tp_cover_before_download(
@@ -115,7 +122,7 @@ def test_metadata_builder_maps_tp_cover_before_download(
 
     def fake_get(url: str, **__: object) -> FakeImageResponse:
         requested_urls.append(url)
-        return FakeImageResponse(b"\xff\xd8\xffimage-bytes", {"content-type": "image/jpeg"})
+        return FakeImageResponse(two_panel_jpeg(), {"content-type": "image/jpeg"})
 
     monkeypatch.setattr("app.services.emby_metadata.httpx.get", fake_get)
 
@@ -152,3 +159,27 @@ def test_metadata_builder_rejects_non_image_payload(
                 cover_url="https://example.test/cover.jpg",
             )
         )
+
+
+def two_panel_jpeg() -> bytes:
+    image = Image.new("RGB", (4, 2))
+    for x in range(2):
+        for y in range(2):
+            image.putpixel((x, y), (255, 0, 0))
+    for x in range(2, 4):
+        for y in range(2):
+            image.putpixel((x, y), (0, 0, 255))
+    output = BytesIO()
+    image.save(output, format="JPEG", quality=100)
+    return output.getvalue()
+
+
+def jpeg_size(content: bytes) -> tuple[int, int]:
+    with Image.open(BytesIO(content)) as image:
+        return image.size
+
+
+def dominant_blue(content: bytes) -> bool:
+    with Image.open(BytesIO(content)) as image:
+        red, _, blue = cast(tuple[int, int, int], image.convert("RGB").getpixel((0, 0)))
+    return blue > red
