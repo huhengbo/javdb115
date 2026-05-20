@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.adapters.telegram import TelegramBotInfo
 from app.database import Database
-from app.errors import ValidationAppError
+from app.errors import IntegrationError, ValidationAppError
 from app.javdb_models import JavdbWork
 from app.repositories.settings import SettingsRepository
 from app.services.notifier import NotificationService
@@ -306,6 +306,53 @@ def test_telegram_movie_subscribe_callback(monkeypatch, tmp_path: Path) -> None:
 
     assert jobs.subscribes == [("bot-token", "abc", "movie-1")]
     assert answered == [("callback-1", "开始处理")]
+    assert sent == [("abc", "已收到订阅下载整理请求，正在后台处理。")]
+
+
+def test_telegram_expired_callback_does_not_block_update_offset(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("telegram_bot_token", "bot-token", True)
+    sent: list[tuple[str, str]] = []
+    jobs = FakeMovieJobs()
+
+    class FakeTelegramBotVerifier:
+        def __init__(self, bot_token: str) -> None:
+            assert bot_token == "bot-token"
+
+        def set_commands(self) -> None:
+            return None
+
+        def get_updates(self, offset: int | None = None) -> list[dict]:
+            return [
+                {
+                    "update_id": 14,
+                    "callback_query": {
+                        "id": "old-callback",
+                        "data": "movie_sub:movie-1",
+                        "message": {"chat": {"id": "abc"}},
+                    },
+                }
+            ]
+
+        def answer_callback_query(self, callback_query_id: str, text: str | None = None) -> None:
+            raise IntegrationError("Telegram answerCallbackQuery failed: query is too old")
+
+        def send_message(self, chat_id: str, text: str) -> None:
+            sent.append((chat_id, text))
+
+    monkeypatch.setattr(
+        "app.services.telegram_commands.TelegramBotVerifier",
+        FakeTelegramBotVerifier,
+    )
+
+    TelegramCommandService(repository, lambda: "状态", lambda: None, movie_jobs=jobs).poll()
+
+    assert repository.get("telegram_last_update_id") == "14"
+    assert jobs.subscribes == [("bot-token", "abc", "movie-1")]
     assert sent == [("abc", "已收到订阅下载整理请求，正在后台处理。")]
 
 

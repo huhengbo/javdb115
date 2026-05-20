@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections.abc import Callable
 from typing import Any, Protocol
 
 from app.adapters.telegram import TelegramBotVerifier
+from app.errors import IntegrationError
 from app.repositories.settings import SettingsRepository
 
 COMMANDS_TOKEN_HASH_KEY = "telegram_commands_token_hash"
@@ -22,6 +24,12 @@ HELP_TEXT = "\n".join(
     ]
 )
 MOVIE_SUBSCRIBE_PREFIX = "movie_sub:"
+STALE_CALLBACK_MESSAGES = (
+    "query is too old",
+    "query ID is invalid",
+    "response timeout expired",
+)
+LOGGER = logging.getLogger(__name__)
 
 
 class TelegramMovieJobRunner(Protocol):
@@ -141,7 +149,7 @@ class TelegramCommandService:
         if data.startswith(MOVIE_SUBSCRIBE_PREFIX):
             self._subscribe_movie_callback(bot, bot_token, callback_id, chat_id, data)
             return
-        bot.answer_callback_query(callback_id, "未知操作")
+        self._answer_callback_query(bot, callback_id, "未知操作")
 
     def _subscribe_movie_callback(
         self,
@@ -151,12 +159,30 @@ class TelegramCommandService:
         chat_id: str | None,
         data: str,
     ) -> None:
-        bot.answer_callback_query(callback_id, "开始处理")
+        self._answer_callback_query(bot, callback_id, "开始处理")
         if self.movie_jobs is None or not chat_id:
             return
         movie_id = data.removeprefix(MOVIE_SUBSCRIBE_PREFIX)
         bot.send_message(chat_id, "已收到订阅下载整理请求，正在后台处理。")
         self.movie_jobs.enqueue_subscribe(bot_token, chat_id, movie_id)
+
+    def _answer_callback_query(
+        self,
+        bot: TelegramBotVerifier,
+        callback_id: str,
+        text: str,
+    ) -> None:
+        try:
+            bot.answer_callback_query(callback_id, text)
+        except IntegrationError as exc:
+            if self._is_stale_callback_error(exc):
+                LOGGER.warning("Telegram callback query expired before ack: %s", exc.message)
+                return
+            raise
+
+    def _is_stale_callback_error(self, exc: IntegrationError) -> bool:
+        message = exc.message.lower()
+        return any(pattern.lower() in message for pattern in STALE_CALLBACK_MESSAGES)
 
     def _chat_id(self, message: dict[str, Any]) -> str | None:
         chat = message.get("chat")

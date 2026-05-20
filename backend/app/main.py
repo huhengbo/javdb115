@@ -20,7 +20,7 @@ from app.repositories.follows import FollowsRepository
 from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.tasks import TasksRepository
-from app.scheduler import SchedulerService
+from app.scheduler import IntervalSchedulerService, SchedulerService
 from app.services.download_monitor import DownloadMonitorDependencies, DownloadMonitorService
 from app.services.follow_workflow import FollowWorkflowDependencies, FollowWorkflowService
 from app.services.settings import DEFAULT_CHECK_CRON
@@ -28,10 +28,11 @@ from app.services.telegram_commands import TelegramCommandService
 from app.services.telegram_movie_jobs import TelegramMovieJobDependencies, TelegramMovieJobRunner
 
 DOWNLOAD_MONITOR_CRON = "* * * * *"
-TELEGRAM_COMMAND_CRON = "* * * * *"
+TELEGRAM_POLL_INTERVAL_SECONDS = 3
+AppScheduler = SchedulerService | IntervalSchedulerService
 
 
-def create_schedulers(connection: Connection, database_path: Path) -> list[SchedulerService]:
+def create_schedulers(connection: Connection, database_path: Path) -> list[AppScheduler]:
     settings_repo = SettingsRepository(connection)
 
     def check_cron_provider() -> str | None:
@@ -93,7 +94,7 @@ def create_schedulers(connection: Connection, database_path: Path) -> list[Sched
 
     check_scheduler = SchedulerService(check_cron_provider, check_job)
     monitor_scheduler = SchedulerService(lambda: DOWNLOAD_MONITOR_CRON, monitor_job)
-    telegram_scheduler = SchedulerService(lambda: TELEGRAM_COMMAND_CRON, telegram_job)
+    telegram_scheduler = IntervalSchedulerService(TELEGRAM_POLL_INTERVAL_SECONDS, telegram_job)
     return [check_scheduler, monitor_scheduler, telegram_scheduler]
 
 

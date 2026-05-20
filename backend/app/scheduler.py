@@ -53,3 +53,39 @@ class SchedulerService:
             return True
         except TimeoutError:
             return False
+
+
+class IntervalSchedulerService:
+    def __init__(self, interval_seconds: int, job: Callable[[], None]) -> None:
+        self.interval_seconds = max(MIN_JOB_DELAY_SECONDS, interval_seconds)
+        self.job = job
+        self._stop = asyncio.Event()
+        self._task: asyncio.Task[None] | None = None
+
+    def start(self) -> None:
+        if self._task is None:
+            self._task = asyncio.create_task(self._run())
+
+    async def stop(self) -> None:
+        self._stop.set()
+        if self._task:
+            await self._task
+
+    async def _run(self) -> None:
+        while not self._stop.is_set():
+            self._run_job()
+            if await self._wait_seconds(self.interval_seconds):
+                return
+
+    def _run_job(self) -> None:
+        try:
+            self.job()
+        except Exception:
+            LOGGER.exception("Interval job failed")
+
+    async def _wait_seconds(self, seconds: float) -> bool:
+        try:
+            await asyncio.wait_for(self._stop.wait(), timeout=seconds)
+            return True
+        except TimeoutError:
+            return False
