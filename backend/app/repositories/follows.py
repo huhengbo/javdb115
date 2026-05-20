@@ -21,6 +21,16 @@ class FollowsRepository:
         ).fetchall()
         return [self._compose(dict(row)) for row in rows]
 
+    def list_enabled_actors(self) -> list[dict[str, object]]:
+        rows = self.connection.execute(
+            """
+            SELECT * FROM follows
+            WHERE enabled = 1 AND type = 'actor'
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+        return [self._compose(dict(row)) for row in rows]
+
     def get(self, follow_id: int) -> dict[str, object] | None:
         row = self.connection.execute("SELECT * FROM follows WHERE id = ?", (follow_id,)).fetchone()
         return None if row is None else self._compose(dict(row))
@@ -60,6 +70,24 @@ class FollowsRepository:
             actor_avatar_url,
             selected_tag_ids,
             selected_tag_names,
+        )
+
+    def save_movie(
+        self,
+        movie_id: str,
+        title: str,
+        source_url: str,
+        cover_url: str | None,
+        status_labels: list[str],
+    ) -> dict[str, object]:
+        return self.save(
+            movie_id,
+            title,
+            source_url,
+            cover_url,
+            [],
+            status_labels,
+            "movie",
         )
 
     def update(
@@ -148,7 +176,7 @@ class FollowsRepository:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
             """,
             (
-                self._legacy_filter_value(actor_external_id),
+                self._filter_value(ftype, actor_external_id),
                 actor_name,
                 ftype,
                 actor_avatar_url,
@@ -220,8 +248,8 @@ class FollowsRepository:
             return []
         return [self._normalize_tag_id(str(item)) for item in value if str(item)]
 
-    def _legacy_filter_value(self, actor_external_id: str) -> str:
-        return f"actor:{actor_external_id}"
+    def _filter_value(self, ftype: str, external_id: str) -> str:
+        return f"{ftype}:{external_id}"
 
     def _normalize_tag_id(self, tag_id: str) -> str:
         legacy_map = {

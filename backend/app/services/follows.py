@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.adapters.javdb_api import JavdbApiClient
+from app.errors import ValidationAppError
 from app.repositories.follows import FollowsRepository
 from app.services.actor_movie_scan import collect_actor_movies
 
@@ -11,9 +12,11 @@ class FollowsService:
         self.api = api
 
     def check_all(self) -> list[dict]:
-        return [self.check_one(follow) for follow in self.repository.list_enabled()]
+        return [self.check_one(follow) for follow in self.repository.list_enabled_actors()]
 
     def check_one(self, follow: dict) -> dict:
+        if follow["type"] != "actor":
+            raise ValidationAppError("Only actor follows can be checked")
         follow_id = int(follow["id"])
         actor_external_id = str(follow["actor_external_id"])
         selected_tag_ids = [str(tag_id) for tag_id in follow["selected_tag_ids"]]

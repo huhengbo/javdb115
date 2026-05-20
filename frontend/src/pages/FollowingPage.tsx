@@ -1,4 +1,4 @@
-import { Loader2, Play, RefreshCw, Tags, Trash2 } from 'lucide-react';
+import { Film, Loader2, Play, RefreshCw, Tags, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { client } from '../api';
 import { ActorDetailSheet } from '../components/discovery/ActorDetailSheet';
@@ -32,9 +32,11 @@ export function FollowingPage() {
   const [selectedMovie, setSelectedMovie] = useState<SelectedMovie | null>(null);
   const [selectedActor, setSelectedActor] = useState<SelectedActor | null>(null);
 
+  const actorFollows = useMemo(() => follows.filter((follow) => follow.type !== 'movie'), [follows]);
+  const movieFollows = useMemo(() => follows.filter((follow) => follow.type === 'movie'), [follows]);
   const followByActorId = useMemo(
-    () => Object.fromEntries(follows.map((follow) => [follow.actor_external_id, follow])),
-    [follows]
+    () => Object.fromEntries(actorFollows.map((follow) => [follow.actor_external_id, follow])),
+    [actorFollows]
   );
 
   useEffect(() => {
@@ -74,7 +76,7 @@ export function FollowingPage() {
     try {
       const result = await client.checkAllFollows();
       const newCount = result.reduce((total, item) => total + item.new_count, 0);
-      setMessage(`已检查 ${result.length} 条关注规则，发现 ${newCount} 部基线后的新作品`);
+      setMessage(`已检查 ${result.length} 条演员关注规则，发现 ${newCount} 部基线后的新作品`);
       await loadFollows();
     } catch (err) {
       setError((err as Error).message);
@@ -194,10 +196,53 @@ export function FollowingPage() {
       <div className="mt-4 space-y-3">
         {follows.length === 0 ? (
           <p className="rounded-lg border border-line bg-white p-4 text-sm text-slate-500">
-            还没有关注演员。可以从发现、排行或作品详情里进入演员页，再选择用于搜索作品的标签。
+            还没有关注演员或订阅作品。演员可以从发现、排行或作品详情进入演员页后关注；作品可以从 Telegram 查询后订阅。
           </p>
         ) : null}
-        {follows.map((follow) => (
+        {movieFollows.length > 0 ? (
+          <h2 className="pt-1 text-sm font-medium text-slate-500">作品订阅</h2>
+        ) : null}
+        {movieFollows.map((follow) => (
+          <article
+            className={`rounded-lg border bg-white p-4 ${
+              follow.enabled ? 'border-line' : 'border-slate-200 opacity-60'
+            }`}
+            key={follow.id}
+          >
+            <button className="flex w-full items-center gap-3 text-left" onClick={() => openMovie(follow.actor_external_id)} type="button">
+              <MoviePoster alt={follow.actor_name} className="h-16 w-12 shrink-0 rounded" src={follow.actor_avatar_url} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1 text-xs text-slate-400">
+                  <Film size={14} />
+                  作品订阅
+                </div>
+                <h3 className="mt-1 line-clamp-2 font-medium text-ink">{follow.actor_name}</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  更新 {formatDateTime(follow.updated_at)}
+                </p>
+              </div>
+            </button>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {follow.selected_tag_names.map((tagName) => (
+                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600" key={tagName}>
+                  {tagName}
+                </span>
+              ))}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button className="min-h-11 rounded-md border border-line text-xs" onClick={() => handleToggle(follow)} type="button">
+                {follow.enabled ? '停用' : '启用'}
+              </button>
+              <button className="flex min-h-11 items-center justify-center rounded-md border border-line text-danger" onClick={() => setDeletingFollow(follow)} type="button" aria-label={`删除订阅 ${follow.actor_name}`}>
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </article>
+        ))}
+        {actorFollows.length > 0 ? (
+          <h2 className="pt-2 text-sm font-medium text-slate-500">演员关注</h2>
+        ) : null}
+        {actorFollows.map((follow) => (
           <article
             className={`rounded-lg border bg-white p-4 ${
               follow.enabled ? 'border-line' : 'border-slate-200 opacity-60'
@@ -253,10 +298,12 @@ export function FollowingPage() {
       ) : null}
       {deletingFollow ? (
         <ConfirmDialog
-          title="删除关注"
+          title={deletingFollow.type === 'movie' ? '删除作品订阅' : '删除关注'}
           description={
             <p>
-              确认删除 {actorLabel(deletingFollow.actor_name)} 的关注规则？已记录的基线和新作计数也会一起移除。
+              {deletingFollow.type === 'movie'
+                ? `确认删除作品订阅 ${deletingFollow.actor_name}？`
+                : `确认删除 ${actorLabel(deletingFollow.actor_name)} 的关注规则？已记录的基线和新作计数也会一起移除。`}
             </p>
           }
           confirmLabel="删除"

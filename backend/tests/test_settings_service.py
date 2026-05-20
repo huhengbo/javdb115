@@ -14,7 +14,6 @@ from app.services.settings import (
     SettingsService,
 )
 from app.services.telegram_commands import TelegramCommandService
-from app.services.telegram_movies import TelegramMovieCard
 
 
 def test_public_settings_include_defaults_and_hide_obsolete_keys(tmp_path: Path) -> None:
@@ -229,11 +228,12 @@ def test_telegram_commands_status_and_check(monkeypatch, tmp_path: Path) -> None
     ]
 
 
-def test_telegram_plain_text_queries_movie(monkeypatch, tmp_path: Path) -> None:
+def test_telegram_plain_text_enqueues_movie_lookup(monkeypatch, tmp_path: Path) -> None:
     connection = setup_database(tmp_path).connect()
     repository = SettingsRepository(connection)
     repository.upsert("telegram_bot_token", "bot-token", True)
-    sent_photos: list[tuple[str, str, str, dict[str, object] | None]] = []
+    sent: list[tuple[str, str]] = []
+    jobs = FakeMovieJobs()
 
     class FakeTelegramBotVerifier:
         def __init__(self, bot_token: str) -> None:
@@ -245,14 +245,8 @@ def test_telegram_plain_text_queries_movie(monkeypatch, tmp_path: Path) -> None:
         def get_updates(self, offset: int | None = None) -> list[dict]:
             return [{"update_id": 12, "message": {"chat": {"id": "abc"}, "text": "ABC-123"}}]
 
-        def send_photo(
-            self,
-            chat_id: str,
-            photo: str,
-            caption: str,
-            reply_markup: dict[str, object] | None = None,
-        ) -> None:
-            sent_photos.append((chat_id, photo, caption, reply_markup))
+        def send_message(self, chat_id: str, text: str) -> None:
+            sent.append((chat_id, text))
 
     monkeypatch.setattr(
         "app.services.telegram_commands.TelegramBotVerifier",
@@ -263,13 +257,11 @@ def test_telegram_plain_text_queries_movie(monkeypatch, tmp_path: Path) -> None:
         repository,
         lambda: "状态",
         lambda: None,
-        movie_handler=FakeMovieHandler(),
+        movie_jobs=jobs,
     ).poll()
 
-    assert sent_photos[0][0] == "abc"
-    assert sent_photos[0][1] == "https://example.test/cover.jpg"
-    assert "ABC-123" in sent_photos[0][2]
-    assert sent_photos[0][3] is not None
+    assert sent == [("abc", "正在搜索：ABC-123")]
+    assert jobs.lookups == [("bot-token", "abc", "ABC-123")]
 
 
 def test_telegram_movie_subscribe_callback(monkeypatch, tmp_path: Path) -> None:
@@ -278,7 +270,7 @@ def test_telegram_movie_subscribe_callback(monkeypatch, tmp_path: Path) -> None:
     repository.upsert("telegram_bot_token", "bot-token", True)
     sent: list[tuple[str, str]] = []
     answered: list[tuple[str, str | None]] = []
-    handler = FakeMovieHandler()
+    jobs = FakeMovieJobs()
 
     class FakeTelegramBotVerifier:
         def __init__(self, bot_token: str) -> None:
@@ -310,30 +302,23 @@ def test_telegram_movie_subscribe_callback(monkeypatch, tmp_path: Path) -> None:
         FakeTelegramBotVerifier,
     )
 
-    TelegramCommandService(repository, lambda: "状态", lambda: None, movie_handler=handler).poll()
+    TelegramCommandService(repository, lambda: "状态", lambda: None, movie_jobs=jobs).poll()
 
-    assert handler.subscribed_movie_ids == ["movie-1"]
+    assert jobs.subscribes == [("bot-token", "abc", "movie-1")]
     assert answered == [("callback-1", "开始处理")]
-    assert sent == [("abc", "已提交自动下载整理任务：#1")]
+    assert sent == [("abc", "已收到订阅下载整理请求，正在后台处理。")]
 
 
-class FakeMovieHandler:
+class FakeMovieJobs:
     def __init__(self) -> None:
-        self.subscribed_movie_ids: list[str] = []
+        self.lookups: list[tuple[str, str, str]] = []
+        self.subscribes: list[tuple[str, str, str]] = []
 
-    def lookup(self, query: str) -> TelegramMovieCard | None:
-        assert query == "ABC-123"
-        return TelegramMovieCard(
-            movie_id="movie-1",
-            title="ABC-123 Sample",
-            caption="番号: ABC-123",
-            cover_url="https://example.test/cover.jpg",
-            source_url="https://javdb.com/v/movie-1",
-        )
+    def enqueue_lookup(self, bot_token: str, chat_id: str, query: str) -> None:
+        self.lookups.append((bot_token, chat_id, query))
 
-    def subscribe(self, movie_id: str) -> str:
-        self.subscribed_movie_ids.append(movie_id)
-        return "已提交自动下载整理任务：#1"
+    def enqueue_subscribe(self, bot_token: str, chat_id: str, movie_id: str) -> None:
+        self.subscribes.append((bot_token, chat_id, movie_id))
 
 
 def by_key(items: list[dict[str, object]]) -> dict[str, dict[str, object]]:

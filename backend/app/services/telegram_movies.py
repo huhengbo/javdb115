@@ -7,10 +7,15 @@ from typing import Protocol
 from app.media_urls import external_image_url
 from app.repositories.actors import ActorsRepository
 from app.repositories.catalog import CatalogRepository
+from app.repositories.follows import FollowsRepository
 from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.tasks import TasksRepository
-from app.services.manual_offline import ManualOfflineDependencies, ManualOfflineService
+from app.services.manual_offline import (
+    ManualOfflineDependencies,
+    ManualOfflineResult,
+    ManualOfflineService,
+)
 
 
 class TelegramMovieJavdbClient(Protocol):
@@ -33,6 +38,7 @@ class TelegramMovieCard:
 class TelegramMovieDependencies:
     actors: ActorsRepository
     catalog: CatalogRepository
+    follows: FollowsRepository
     logs: LogsRepository
     settings: SettingsRepository
     tasks: TasksRepository
@@ -43,6 +49,7 @@ class TelegramMovieService:
     def __init__(self, dependencies: TelegramMovieDependencies) -> None:
         self.actors = dependencies.actors
         self.catalog = dependencies.catalog
+        self.follows = dependencies.follows
         self.logs = dependencies.logs
         self.settings = dependencies.settings
         self.tasks = dependencies.tasks
@@ -58,13 +65,31 @@ class TelegramMovieService:
         return self._card(merged)
 
     def subscribe(self, movie_id: str) -> str:
+        detail = self.javdb.movie_detail(movie_id)
+        self._save_movie_follow(movie_id, detail, ["后台处理中"])
+        try:
+            result = self._submit_best_magnet(movie_id, detail)
+        except Exception:
+            self._save_movie_follow(movie_id, detail, ["提交失败"])
+            raise
+        if result is None:
+            return "已加入作品订阅，当前未找到可用磁力。"
+        if result.duplicate_task:
+            self._save_movie_follow(movie_id, detail, ["已有任务"])
+            return "这个作品已有任务，不重复提交。"
+        self._save_movie_follow(movie_id, detail, [f"任务 #{result.task_id}", "已提交"])
+        return f"已提交自动下载整理任务：#{result.task_id}"
+
+    def _submit_best_magnet(
+        self,
+        movie_id: str,
+        detail: dict[str, object],
+    ) -> ManualOfflineResult | None:
         magnet = self._best_magnet(self.javdb.movie_magnets(movie_id))
         if magnet is None:
-            return "未找到可用磁力，暂时无法自动提交。"
-        result = self._manual_offline().submit(movie_id, str(magnet["hash"]))
-        if result.duplicate_task:
-            return "这个作品已有任务，不重复提交。"
-        return f"已提交自动下载整理任务：#{result.task_id}"
+            self._save_movie_follow(movie_id, detail, ["等待磁力"])
+            return None
+        return self._manual_offline().submit(movie_id, str(magnet["hash"]))
 
     def _find_movie(self, query: str) -> dict[str, object] | None:
         movies = self.javdb.search(query.strip())
@@ -156,3 +181,22 @@ class TelegramMovieService:
 
     def _optional_string(self, value: object) -> str | None:
         return str(value) if value else None
+
+    def _save_movie_follow(
+        self,
+        movie_id: str,
+        detail: dict[str, object],
+        status_labels: list[str],
+    ) -> None:
+        self.follows.save_movie(
+            movie_id,
+            self._movie_follow_title(movie_id, detail),
+            self.javdb.movie_source_url(movie_id),
+            self._optional_string(detail.get("cover_url") or detail.get("thumb_url")),
+            status_labels,
+        )
+
+    def _movie_follow_title(self, movie_id: str, detail: dict[str, object]) -> str:
+        number = str(detail.get("number") or movie_id)
+        title = str(detail.get("title") or "")
+        return f"{number} {title}".strip()

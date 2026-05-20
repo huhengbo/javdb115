@@ -65,13 +65,15 @@ class FollowWorkflowService:
     def check_all_enabled(self) -> list[FollowWorkflowResult]:
         return [
             self.check_follow(int(cast(int, follow["id"])))
-            for follow in self.follows.list_enabled()
+            for follow in self.follows.list_enabled_actors()
         ]
 
     def check_follow(self, follow_id: int) -> FollowWorkflowResult:
         follow = self.follows.get(follow_id)
         if follow is None:
             raise NotFoundError(f"Follow not found: {follow_id}")
+        if follow["type"] != "actor":
+            raise ValidationAppError("Only actor follows can be checked")
         actor_id = self._ensure_actor_record(follow)
         movies = collect_actor_movies(
             self.javdb,

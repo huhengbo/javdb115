@@ -25,13 +25,13 @@ from app.services.download_monitor import DownloadMonitorDependencies, DownloadM
 from app.services.follow_workflow import FollowWorkflowDependencies, FollowWorkflowService
 from app.services.settings import DEFAULT_CHECK_CRON
 from app.services.telegram_commands import TelegramCommandService
-from app.services.telegram_movies import TelegramMovieDependencies, TelegramMovieService
+from app.services.telegram_movie_jobs import TelegramMovieJobDependencies, TelegramMovieJobRunner
 
 DOWNLOAD_MONITOR_CRON = "* * * * *"
 TELEGRAM_COMMAND_CRON = "* * * * *"
 
 
-def create_schedulers(connection: Connection) -> list[SchedulerService]:
+def create_schedulers(connection: Connection, database_path: Path) -> list[SchedulerService]:
     settings_repo = SettingsRepository(connection)
 
     def check_cron_provider() -> str | None:
@@ -85,15 +85,8 @@ def create_schedulers(connection: Connection) -> list[SchedulerService]:
             settings_repo,
             telegram_status,
             run_follow_check,
-            movie_handler=TelegramMovieService(
-                TelegramMovieDependencies(
-                    actors=ActorsRepository(connection),
-                    catalog=CatalogRepository(connection),
-                    logs=LogsRepository(connection),
-                    settings=settings_repo,
-                    tasks=TasksRepository(connection),
-                    javdb=JavdbApiClient(),
-                )
+            movie_jobs=TelegramMovieJobRunner(
+                TelegramMovieJobDependencies(database_path=database_path)
             ),
         ).poll()
         connection.commit()
@@ -111,7 +104,7 @@ async def lifespan(app: FastAPI) -> Any:
     database.initialize()
 
     with database.connect() as connection:
-        schedulers = create_schedulers(connection)
+        schedulers = create_schedulers(connection, config.database_path)
         for scheduler in schedulers:
             scheduler.start()
         app.state.schedulers = schedulers

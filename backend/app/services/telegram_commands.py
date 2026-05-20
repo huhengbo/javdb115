@@ -6,7 +6,6 @@ from typing import Any, Protocol
 
 from app.adapters.telegram import TelegramBotVerifier
 from app.repositories.settings import SettingsRepository
-from app.services.telegram_movies import TelegramMovieCard
 
 COMMANDS_TOKEN_HASH_KEY = "telegram_commands_token_hash"
 LAST_UPDATE_ID_KEY = "telegram_last_update_id"
@@ -25,9 +24,9 @@ HELP_TEXT = "\n".join(
 MOVIE_SUBSCRIBE_PREFIX = "movie_sub:"
 
 
-class TelegramMovieHandler(Protocol):
-    def lookup(self, query: str) -> TelegramMovieCard | None: ...
-    def subscribe(self, movie_id: str) -> str: ...
+class TelegramMovieJobRunner(Protocol):
+    def enqueue_lookup(self, bot_token: str, chat_id: str, query: str) -> None: ...
+    def enqueue_subscribe(self, bot_token: str, chat_id: str, movie_id: str) -> None: ...
 
 
 class TelegramCommandService:
@@ -36,12 +35,12 @@ class TelegramCommandService:
         settings: SettingsRepository,
         status_provider: Callable[[], str],
         check_runner: Callable[[], None],
-        movie_handler: TelegramMovieHandler | None = None,
+        movie_jobs: TelegramMovieJobRunner | None = None,
     ) -> None:
         self.settings = settings
         self.status_provider = status_provider
         self.check_runner = check_runner
-        self.movie_handler = movie_handler
+        self.movie_jobs = movie_jobs
 
     def poll(self) -> None:
         token = self.settings.get(TELEGRAM_TOKEN_KEY)
@@ -51,7 +50,7 @@ class TelegramCommandService:
         self._ensure_commands(bot, token)
         updates = bot.get_updates(self._next_offset())
         for update in updates:
-            self._handle_update(bot, update)
+            self._handle_update(bot, token, update)
         self._save_next_offset(updates)
 
     def _ensure_commands(self, bot: TelegramBotVerifier, token: str) -> None:
@@ -71,10 +70,15 @@ class TelegramCommandService:
         if numeric_ids:
             self.settings.upsert(LAST_UPDATE_ID_KEY, str(max(numeric_ids)), False)
 
-    def _handle_update(self, bot: TelegramBotVerifier, update: dict[str, Any]) -> None:
+    def _handle_update(
+        self,
+        bot: TelegramBotVerifier,
+        bot_token: str,
+        update: dict[str, Any],
+    ) -> None:
         callback_query = update.get("callback_query")
         if isinstance(callback_query, dict):
-            self._handle_callback_query(bot, callback_query)
+            self._handle_callback_query(bot, bot_token, callback_query)
             return
         message = update.get("message")
         if not isinstance(message, dict):
@@ -87,7 +91,7 @@ class TelegramCommandService:
         if command:
             self._run_command(bot, chat_id, command)
             return
-        self._run_movie_lookup(bot, chat_id, text)
+        self._run_movie_lookup(bot, bot_token, chat_id, text)
 
     def _run_command(self, bot: TelegramBotVerifier, chat_id: str, command: str) -> None:
         if command == "start":
@@ -110,23 +114,23 @@ class TelegramCommandService:
         self.check_runner()
         bot.send_message(chat_id, "演员订阅检查完成。")
 
-    def _run_movie_lookup(self, bot: TelegramBotVerifier, chat_id: str, text: str) -> None:
-        if self.movie_handler is None:
+    def _run_movie_lookup(
+        self,
+        bot: TelegramBotVerifier,
+        bot_token: str,
+        chat_id: str,
+        text: str,
+    ) -> None:
+        if self.movie_jobs is None:
             bot.send_message(chat_id, "作品查询功能未启用。")
             return
-        card = self.movie_handler.lookup(text)
-        if card is None:
-            bot.send_message(chat_id, f"没有找到作品：{text}")
-            return
-        reply_markup = self._movie_reply_markup(card)
-        if card.cover_url:
-            bot.send_photo(chat_id, card.cover_url, card.caption, reply_markup)
-            return
-        bot.send_message(chat_id, card.caption, reply_markup)
+        bot.send_message(chat_id, f"正在搜索：{text}")
+        self.movie_jobs.enqueue_lookup(bot_token, chat_id, text)
 
     def _handle_callback_query(
         self,
         bot: TelegramBotVerifier,
+        bot_token: str,
         callback_query: dict[str, Any],
     ) -> None:
         callback_id = self._callback_id(callback_query)
@@ -135,36 +139,24 @@ class TelegramCommandService:
         if not isinstance(data, str) or not callback_id:
             return
         if data.startswith(MOVIE_SUBSCRIBE_PREFIX):
-            self._subscribe_movie_callback(bot, callback_id, chat_id, data)
+            self._subscribe_movie_callback(bot, bot_token, callback_id, chat_id, data)
             return
         bot.answer_callback_query(callback_id, "未知操作")
 
     def _subscribe_movie_callback(
         self,
         bot: TelegramBotVerifier,
+        bot_token: str,
         callback_id: str,
         chat_id: str | None,
         data: str,
     ) -> None:
         bot.answer_callback_query(callback_id, "开始处理")
-        if self.movie_handler is None or not chat_id:
+        if self.movie_jobs is None or not chat_id:
             return
         movie_id = data.removeprefix(MOVIE_SUBSCRIBE_PREFIX)
-        message = self.movie_handler.subscribe(movie_id)
-        bot.send_message(chat_id, message)
-
-    def _movie_reply_markup(self, card: TelegramMovieCard) -> dict[str, object]:
-        return {
-            "inline_keyboard": [
-                [
-                    {
-                        "text": "订阅下载整理",
-                        "callback_data": f"{MOVIE_SUBSCRIBE_PREFIX}{card.movie_id}",
-                    }
-                ],
-                [{"text": "打开 JavDB", "url": card.source_url}],
-            ]
-        }
+        bot.send_message(chat_id, "已收到订阅下载整理请求，正在后台处理。")
+        self.movie_jobs.enqueue_subscribe(bot_token, chat_id, movie_id)
 
     def _chat_id(self, message: dict[str, Any]) -> str | None:
         chat = message.get("chat")

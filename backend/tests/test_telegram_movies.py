@@ -6,6 +6,7 @@ from typing import Any
 from app.database import Database
 from app.repositories.actors import ActorsRepository
 from app.repositories.catalog import CatalogRepository
+from app.repositories.follows import FollowsRepository
 from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.tasks import TasksRepository
@@ -79,14 +80,19 @@ def test_subscribe_prefers_uc_before_newer_u_or_c(monkeypatch: Any, tmp_path: Pa
 
     assert message == "已提交自动下载整理任务：#1"
     assert calls == ["magnet:?xt=urn:btih:hash-uc&dn=ABC-123-UC"]
+    follows = FollowsRepository(connection).list_all()
+    assert follows[0]["type"] == "movie"
+    assert follows[0]["actor_external_id"] == "movie-1"
+    assert follows[0]["selected_tag_names"] == ["任务 #1", "已提交"]
 
 
 def service(connection: Any) -> TelegramMovieService:
     return TelegramMovieService(
         TelegramMovieDependencies(
-            actors=ActorsRepository(connection),
-            catalog=CatalogRepository(connection),
-            logs=LogsRepository(connection),
+                actors=ActorsRepository(connection),
+                catalog=CatalogRepository(connection),
+                follows=FollowsRepository(connection),
+                logs=LogsRepository(connection),
             settings=SettingsRepository(connection),
             tasks=TasksRepository(connection),
             javdb=FakeJavdb(),
