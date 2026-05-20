@@ -67,10 +67,12 @@ class TelegramMovieService:
     def subscribe(self, movie_id: str) -> str:
         detail = self.javdb.movie_detail(movie_id)
         self._save_movie_follow(movie_id, detail, ["后台处理中"])
+        self._commit()
         try:
             result = self._submit_best_magnet(movie_id, detail)
         except Exception:
             self._save_movie_follow(movie_id, detail, ["提交失败"])
+            self._commit()
             raise
         if result is None:
             return "已加入作品订阅，当前未找到可用磁力。"
@@ -200,3 +202,6 @@ class TelegramMovieService:
         number = str(detail.get("number") or movie_id)
         title = str(detail.get("title") or "")
         return f"{number} {title}".strip()
+
+    def _commit(self) -> None:
+        self.tasks.connection.commit()

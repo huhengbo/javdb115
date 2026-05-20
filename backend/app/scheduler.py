@@ -39,11 +39,11 @@ class SchedulerService:
             delay = max(MIN_JOB_DELAY_SECONDS, next_time - now_utc().timestamp())
             if await self._wait_seconds(delay):
                 return
-            self._run_job()
+            await self._run_job()
 
-    def _run_job(self) -> None:
+    async def _run_job(self) -> None:
         try:
-            self.job()
+            await asyncio.to_thread(self.job)
         except Exception:
             LOGGER.exception("Scheduled check failed")
 
@@ -73,13 +73,13 @@ class IntervalSchedulerService:
 
     async def _run(self) -> None:
         while not self._stop.is_set():
-            self._run_job()
+            await self._run_job()
             if await self._wait_seconds(self.interval_seconds):
                 return
 
-    def _run_job(self) -> None:
+    async def _run_job(self) -> None:
         try:
-            self.job()
+            await asyncio.to_thread(self.job)
         except Exception:
             LOGGER.exception("Interval job failed")
 

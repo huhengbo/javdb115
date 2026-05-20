@@ -69,6 +69,7 @@ class ManualOfflineService:
         magnet_id = self.catalog.add_magnet(work_id, magnet, "manual", "manual_submit", 0)
         actor_id = self._actor_id(detail)
         task_id = self.tasks.create(work_id, actor_id, magnet_id)
+        self._commit()
         cloud_task_id = self._submit_to_115(task_id, work, magnet)
         self._state().transition(
             task_id,
@@ -85,6 +86,7 @@ class ManualOfflineService:
             task_id,
             {"movie_id": movie_id},
         )
+        self._commit()
         self._send_submitted_notification(task_id, work, magnet)
         return ManualOfflineResult(task_id)
 
@@ -100,6 +102,7 @@ class ManualOfflineService:
                 task_id,
                 TaskTransition("failed", "115_submit_failed", error_message=str(exc)),
             )
+            self._commit()
             raise
 
     def _find_magnet(self, movie_id: str, magnet_hash: str) -> dict:
@@ -168,3 +171,6 @@ class ManualOfflineService:
 
     def _state(self) -> TaskStateService:
         return TaskStateService(self.tasks, TaskEventsRepository(self.tasks.connection))
+
+    def _commit(self) -> None:
+        self.tasks.connection.commit()

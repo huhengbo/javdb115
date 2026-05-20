@@ -106,6 +106,7 @@ class DownloadMonitorService:
             )
             return False
         self._state().transition(task_id, TaskTransition("organizing", "115_organizing"))
+        self._commit()
         try:
             plan = CloudOrganizer(cloud).organize(
                 str(remote.source_dir_id),
@@ -133,6 +134,7 @@ class DownloadMonitorService:
             task_id,
             self._log_context(task),
         )
+        self._commit()
         self._send_completed_notification(task, plan.target_dir_id)
         return True
 
@@ -162,6 +164,7 @@ class DownloadMonitorService:
         if work:
             self.catalog.mark_work_status(int(cast(int, work["id"])), "failed")
         self.logs.add("error", stage, message, task_id, self._log_context(task))
+        self._commit()
         self._send_failed_notification(task, stage, message)
 
     def _send_completed_notification(self, task: dict[str, Any], cloud_file_id: str) -> None:
@@ -216,3 +219,6 @@ class DownloadMonitorService:
 
     def _state(self) -> TaskStateService:
         return TaskStateService(self.tasks, TaskEventsRepository(self.tasks.connection))
+
+    def _commit(self) -> None:
+        self.tasks.connection.commit()

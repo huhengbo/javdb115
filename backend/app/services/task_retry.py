@@ -96,6 +96,7 @@ class TaskRetryService:
             task_id,
             self._log_context(task),
         )
+        self._commit()
         self._send_submitted_notification(task_id, work, magnet)
 
     def _mark_submit_failed(self, task: dict[str, Any], exc: Exception) -> None:
@@ -113,6 +114,7 @@ class TaskRetryService:
         if work is not None:
             self.catalog.mark_work_status(int(cast(int, work["id"])), "failed")
         self.logs.add("error", "115_submit_failed", str(exc), task_id, self._log_context(task))
+        self._commit()
         self._send_failed_notification(task, str(exc))
 
     def _send_submitted_notification(
@@ -169,3 +171,6 @@ class TaskRetryService:
 
     def _state(self) -> TaskStateService:
         return TaskStateService(self.tasks, TaskEventsRepository(self.tasks.connection))
+
+    def _commit(self) -> None:
+        self.tasks.connection.commit()

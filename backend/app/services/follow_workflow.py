@@ -221,6 +221,7 @@ class FollowWorkflowService:
             request.best.score,
         )
         task_id = self.tasks.create(request.work_id, request.actor_id, magnet_id)
+        self._commit()
         try:
             cloud_task_id = self._submit_to_115(request.work, request.best.magnet)
             self._state().transition(
@@ -235,6 +236,7 @@ class FollowWorkflowService:
         except Exception as exc:
             self._handle_submit_failure(task_id, request.work, exc)
             raise
+        self._commit()
         self._send_submitted_notification(task_id, request.work, request.best.magnet)
 
     def _handle_submit_failure(self, task_id: int, work: JavdbWork, exc: Exception) -> None:
@@ -243,6 +245,7 @@ class FollowWorkflowService:
             TaskTransition("failed", "115_submit_failed", error_message=str(exc)),
         )
         self.logs.add("error", "115_submit_failed", str(exc), task_id, {"code": work.code})
+        self._commit()
         self._send_failed_notification(task_id, work.code, str(exc))
 
     def _send_submitted_notification(
@@ -288,3 +291,6 @@ class FollowWorkflowService:
 
     def _state(self) -> TaskStateService:
         return TaskStateService(self.tasks, TaskEventsRepository(self.tasks.connection))
+
+    def _commit(self) -> None:
+        self.tasks.connection.commit()
