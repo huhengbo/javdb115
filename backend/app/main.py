@@ -86,6 +86,7 @@ def _run_download_monitor(connection: Connection) -> None:
     DownloadMonitorService(
         DownloadMonitorDependencies(
             catalog=CatalogRepository(connection),
+            follows=FollowsRepository(connection),
             tasks=TasksRepository(connection),
             logs=LogsRepository(connection),
             settings=settings_repo,

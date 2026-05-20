@@ -11,6 +11,7 @@ from app.adapters.cloud115_types import CloudDirectory, CloudItem, CloudOfflineT
 from app.database import Database
 from app.javdb_models import JavdbMagnet, JavdbWork
 from app.repositories.catalog import CatalogRepository
+from app.repositories.follows import FollowsRepository
 from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.tasks import TasksRepository
@@ -111,6 +112,15 @@ def test_monitor_organizes_completed_task(monkeypatch: MonkeyPatch, tmp_path: Pa
     database = setup_database(tmp_path)
     connection = database.connect()
     task_id = create_submitted_task(connection, "done-hash")
+    FollowsRepository(connection).save_movie(
+        "abc",
+        "ABC-123 Sample",
+        "https://javdb.com/v/abc",
+        None,
+        ["已提交"],
+    )
+    assert any(follow["type"] == "movie" for follow in FollowsRepository(connection).list_all())
+    connection.commit()
     cloud = CompletedCloud()
     monkeypatch.setattr(
         "app.services.download_monitor.CloudServiceFactory.create",
@@ -120,6 +130,7 @@ def test_monitor_organizes_completed_task(monkeypatch: MonkeyPatch, tmp_path: Pa
     result = service(connection).poll_unfinished()
     task = TasksRepository(connection).list_all()[0]
     logs = LogsRepository(connection).list()
+    follows = FollowsRepository(connection).list_all()
 
     assert result.completed_count == 1
     assert task["id"] == task_id
@@ -137,6 +148,7 @@ def test_monitor_organizes_completed_task(monkeypatch: MonkeyPatch, tmp_path: Pa
     assert cloud.uploaded[0][0:2] == ("target-dir", "ABC-123.nfo")
     assert b"<title>Sample</title>" in cloud.uploaded[0][2]
     assert logs[0]["stage"] == "115_organized"
+    assert all(follow["type"] != "movie" for follow in follows)
 
 
 def test_organizer_preserves_code_variant_suffix_from_main_video_name() -> None:
@@ -363,6 +375,7 @@ def service(connection: Connection) -> DownloadMonitorService:
     return DownloadMonitorService(
         DownloadMonitorDependencies(
             catalog=CatalogRepository(connection),
+            follows=FollowsRepository(connection),
             logs=LogsRepository(connection),
             settings=SettingsRepository(connection),
             tasks=TasksRepository(connection),

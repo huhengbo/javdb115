@@ -155,6 +155,12 @@ class FollowsRepository:
     def delete(self, follow_id: int) -> None:
         self.connection.execute("DELETE FROM follows WHERE id = ?", (follow_id,))
 
+    def delete_movie(self, movie_id: str) -> None:
+        self.connection.execute(
+            "DELETE FROM follows WHERE type = 'movie' AND actor_external_id = ?",
+            (movie_id,),
+        )
+
     def _create(
         self,
         actor_external_id: str,

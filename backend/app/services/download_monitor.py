@@ -3,11 +3,13 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from typing import Any, cast
+from urllib.parse import urlparse
 
 from app.adapters.cloud115 import Cloud115Client
 from app.adapters.cloud115_types import CloudOfflineTask
 from app.javdb_models import JavdbWork
 from app.repositories.catalog import CatalogRepository
+from app.repositories.follows import FollowsRepository
 from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.task_events import TaskEventsRepository
@@ -24,6 +26,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class DownloadMonitorDependencies:
     catalog: CatalogRepository
+    follows: FollowsRepository
     logs: LogsRepository
     settings: SettingsRepository
     tasks: TasksRepository
@@ -40,6 +43,7 @@ class DownloadMonitorResult:
 class DownloadMonitorService:
     def __init__(self, dependencies: DownloadMonitorDependencies) -> None:
         self.catalog = dependencies.catalog
+        self.follows = dependencies.follows
         self.logs = dependencies.logs
         self.settings = dependencies.settings
         self.tasks = dependencies.tasks
@@ -127,6 +131,7 @@ class DownloadMonitorService:
             ),
         )
         self.catalog.mark_work_status(int(cast(int, work["id"])), "completed")
+        self._delete_completed_movie_follow(work)
         self.logs.add(
             "info",
             "115_organized",
@@ -137,6 +142,19 @@ class DownloadMonitorService:
         self._commit()
         self._send_completed_notification(task, plan.target_dir_id)
         return True
+
+    def _delete_completed_movie_follow(self, work: dict[str, Any]) -> None:
+        movie_id = self._movie_id_from_source_url(str(work.get("source_url") or ""))
+        if movie_id is None:
+            return
+        self.follows.delete_movie(movie_id)
+
+    def _movie_id_from_source_url(self, source_url: str) -> str | None:
+        path = urlparse(source_url).path.rstrip("/")
+        if "/v/" not in path:
+            return None
+        movie_id = path.rsplit("/v/", 1)[-1]
+        return movie_id or None
 
     def _mark_downloading(self, task: dict[str, Any], remote: CloudOfflineTask) -> None:
         progress = "" if remote.progress_percent is None else f" ({remote.progress_percent}%)"
