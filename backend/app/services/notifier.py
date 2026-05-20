@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.adapters.telegram import TelegramBotVerifier, TelegramNotifier
 from app.errors import ValidationAppError
 from app.javdb_models import JavdbWork
+from app.media_urls import external_image_url
 from app.repositories.settings import SettingsRepository
 
 
@@ -15,7 +16,7 @@ class NotificationService:
         if notifier is None:
             return
         caption = self._caption("已提交 115", work, size_label)
-        notifier.send_card(work.title or work.code, caption, work.cover_url)
+        notifier.send_card(work.title or work.code, caption, external_image_url(work.cover_url))
 
     def send_failed(self, title: str, stage: str, message: str) -> None:
         notifier = self._notifier_or_none()
@@ -31,7 +32,7 @@ class NotificationService:
         notifier.send_card(
             work.title or work.code,
             f"{caption}\n目录 ID: {cloud_file_id}",
-            work.cover_url,
+            external_image_url(work.cover_url),
         )
 
     def send_test(self, message: str | None = None) -> str:

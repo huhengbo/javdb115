@@ -45,7 +45,7 @@ class TelegramNotifier:
         response = httpx.post(url, json=payload, timeout=TELEGRAM_TIMEOUT_SECONDS)
         if response.is_success:
             return
-        raise IntegrationError(f"Telegram {method} failed: HTTP {response.status_code}")
+        raise IntegrationError(telegram_response_error(method, response))
 
 
 class TelegramBotVerifier:
@@ -95,7 +95,7 @@ class TelegramBotVerifier:
         else:
             response = httpx.post(url, json=payload, timeout=TELEGRAM_TIMEOUT_SECONDS)
         if not response.is_success:
-            raise IntegrationError(f"Telegram {method} failed: HTTP {response.status_code}")
+            raise IntegrationError(telegram_response_error(method, response))
         return self._result_object(method, response)
 
     def _result_object(
@@ -112,3 +112,20 @@ class TelegramBotVerifier:
         if payload.get("ok") is not True:
             raise IntegrationError(f"Telegram {method} failed")
         return payload.get("result")
+
+
+def telegram_response_error(method: str, response: httpx.Response) -> str:
+    description = telegram_response_description(response)
+    detail = f": {description}" if description else ""
+    return f"Telegram {method} failed: HTTP {response.status_code}{detail}"
+
+
+def telegram_response_description(response: httpx.Response) -> str | None:
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    description = payload.get("description")
+    return description if isinstance(description, str) else None

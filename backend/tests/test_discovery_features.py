@@ -396,6 +396,31 @@ def test_manual_offline_duplicate_requires_force(monkeypatch, tmp_path: Path) ->
     assert len(tasks) == 2
 
 
+def test_manual_offline_keeps_task_when_notification_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    connection = setup_manual_database(monkeypatch, tmp_path)
+
+    def fail_notification(self: Any, work: Any, size_label: str) -> None:
+        raise RuntimeError("Telegram sendPhoto failed: HTTP 400")
+
+    monkeypatch.setattr(
+        "app.services.manual_offline.NotificationService.send_submitted",
+        fail_notification,
+    )
+
+    result = ManualOfflineService(manual_dependencies(connection)).submit("abc123", "hash-1")
+    task = TasksRepository(connection).get_raw(int(cast(int, result.task_id)))
+    logs = LogsRepository(connection).list()
+    stages = [str(log["stage"]) for log in logs]
+
+    assert task is not None
+    assert task["status"] == "submitted"
+    assert "notification_failed" in stages
+    assert "manual_115_submitted" in stages
+
+
 def test_follow_workflow_creates_submitted_task(monkeypatch, tmp_path: Path) -> None:
     database = setup_database(tmp_path)
     connection = database.connect()

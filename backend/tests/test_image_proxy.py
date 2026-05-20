@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.api.image_proxy import build_upstream_image_url
+from app.media_urls import build_upstream_image_url, external_image_url
 
 
 def test_build_upstream_image_url_maps_tp_small_covers_to_jdbstatic_covers() -> None:
@@ -22,3 +22,15 @@ def test_build_upstream_image_url_keeps_non_tp_hosts_unchanged() -> None:
     url = build_upstream_image_url("c0.jdbstatic.com", "samples/dr/DRPRE4_s_0.jpg")
 
     assert url == "https://c0.jdbstatic.com/samples/dr/DRPRE4_s_0.jpg"
+
+
+def test_external_image_url_maps_tp_covers_for_telegram() -> None:
+    url = external_image_url("https://tp.cmastd.com/rhe951l4q/covers/yx/yx5O9r.jpg")
+
+    assert url == "https://c0.jdbstatic.com/covers/yx/yx5O9r.jpg"
+
+
+def test_external_image_url_keeps_unknown_hosts() -> None:
+    url = external_image_url("https://example.com/image.jpg")
+
+    assert url == "https://example.com/image.jpg"

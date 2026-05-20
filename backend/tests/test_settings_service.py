@@ -5,6 +5,7 @@ from pathlib import Path
 from app.adapters.telegram import TelegramBotInfo
 from app.database import Database
 from app.errors import ValidationAppError
+from app.javdb_models import JavdbWork
 from app.repositories.settings import SettingsRepository
 from app.services.notifier import NotificationService
 from app.services.settings import (
@@ -111,6 +112,39 @@ def test_telegram_test_can_use_custom_success_message(monkeypatch, tmp_path: Pat
     monkeypatch.setattr("app.services.notifier.TelegramBotVerifier", FakeTelegramBotVerifier)
 
     assert NotificationService(repository).send_test("连接正常") == "连接正常"
+
+
+def test_notification_maps_tp_cover_to_external_image_url(monkeypatch, tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("telegram_bot_token", "bot-token", True)
+    repository.upsert("telegram_chat_id", "chat-id", False)
+    sent: list[tuple[str, str, str | None]] = []
+
+    class FakeTelegramNotifier:
+        def __init__(self, bot_token: str, chat_id: str) -> None:
+            assert bot_token == "bot-token"
+            assert chat_id == "chat-id"
+
+        def send_card(self, title: str, caption: str, cover_url: str | None = None) -> None:
+            sent.append((title, caption, cover_url))
+
+    monkeypatch.setattr("app.services.notifier.TelegramNotifier", FakeTelegramNotifier)
+
+    NotificationService(repository).send_submitted(
+        JavdbWork(
+            code="SAME-234",
+            title="Sample",
+            cover_url="https://tp.cmastd.com/rhe951l4q/covers/yx/yx5O9r.jpg",
+            release_date="2026-05-20",
+            source_url="https://javdb.com/v/yx5O9r",
+            actors=[],
+            magnets=[],
+        ),
+        "1.00 GB",
+    )
+
+    assert sent[0][2] == "https://c0.jdbstatic.com/covers/yx/yx5O9r.jpg"
 
 
 def test_telegram_commands_bind_start_and_save_offset(monkeypatch, tmp_path: Path) -> None:

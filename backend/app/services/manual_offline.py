@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Protocol, cast
 
@@ -16,6 +17,7 @@ from app.services.notifier import NotificationService
 from app.services.task_state import TaskStateService, TaskTransition
 
 BYTES_PER_MB = 1024 * 1024
+LOGGER = logging.getLogger(__name__)
 
 
 class ManualJavdbClient(Protocol):
@@ -83,7 +85,7 @@ class ManualOfflineService:
             task_id,
             {"movie_id": movie_id},
         )
-        NotificationService(self.settings).send_submitted(work, self._size_label(magnet))
+        self._send_submitted_notification(task_id, work, magnet)
         return ManualOfflineResult(task_id)
 
     def _submit_to_115(self, task_id: int, work: JavdbWork, magnet: JavdbMagnet) -> str:
@@ -146,6 +148,23 @@ class ManualOfflineService:
         if magnet.size_bytes is None:
             return "未知"
         return f"{magnet.size_bytes / (1024**3):.2f} GB"
+
+    def _send_submitted_notification(
+        self,
+        task_id: int,
+        work: JavdbWork,
+        magnet: JavdbMagnet,
+    ) -> None:
+        try:
+            NotificationService(self.settings).send_submitted(work, self._size_label(magnet))
+        except Exception as exc:
+            self._log_notification_failure(task_id, work.code, exc)
+
+    def _log_notification_failure(self, task_id: int, code: str, exc: Exception) -> None:
+        try:
+            self.logs.add("error", "notification_failed", str(exc), task_id, {"code": code})
+        except Exception:
+            LOGGER.exception("Unable to record notification failure")
 
     def _state(self) -> TaskStateService:
         return TaskStateService(self.tasks, TaskEventsRepository(self.tasks.connection))
