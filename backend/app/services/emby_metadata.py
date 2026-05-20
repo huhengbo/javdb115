@@ -7,6 +7,8 @@ from xml.etree import ElementTree
 
 import httpx
 
+from app.media_urls import external_image_url
+
 IMAGE_TIMEOUT_SECONDS = 20
 IMAGE_HEADERS = {
     "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
@@ -18,6 +20,7 @@ IMAGE_EXTENSIONS_BY_TYPE = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
 @dataclass(frozen=True)
@@ -71,8 +74,13 @@ class EmbyMetadataBuilder:
     def _poster_image_asset(self, cover_url: str | None) -> list[MetadataAsset]:
         if not cover_url:
             return []
-        image = self._download_image(cover_url)
-        extension = self._image_extension(cover_url, image.headers.get("content-type"))
+        image_url = external_image_url(cover_url) or cover_url
+        image = self._download_image(image_url)
+        extension = self._image_extension(
+            image_url,
+            image.headers.get("content-type"),
+            image.content,
+        )
         return [
             MetadataAsset(f"poster{extension}", image.content),
             MetadataAsset(f"folder{extension}", image.content),
@@ -88,9 +96,14 @@ class EmbyMetadataBuilder:
         response.raise_for_status()
         if not response.content:
             raise ValueError(f"metadata image was empty: {url}")
+        if self._image_signature_extension(response.content) is None:
+            raise ValueError(f"metadata image was not a supported image: {url}")
         return response
 
-    def _image_extension(self, url: str, content_type: str | None) -> str:
+    def _image_extension(self, url: str, content_type: str | None, content: bytes) -> str:
+        signature_extension = self._image_signature_extension(content)
+        if signature_extension:
+            return signature_extension
         media_type = (content_type or "").split(";", 1)[0].strip().lower()
         if media_type in IMAGE_EXTENSIONS_BY_TYPE:
             return IMAGE_EXTENSIONS_BY_TYPE[media_type]
@@ -98,6 +111,15 @@ class EmbyMetadataBuilder:
         if suffix in IMAGE_EXTENSIONS_BY_TYPE.values():
             return suffix
         return ".jpg"
+
+    def _image_signature_extension(self, content: bytes) -> str | None:
+        if content.startswith(b"\xff\xd8\xff"):
+            return ".jpg"
+        if content.startswith(PNG_SIGNATURE):
+            return ".png"
+        if content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+            return ".webp"
+        return None
 
     def _add_unique_id(
         self,
