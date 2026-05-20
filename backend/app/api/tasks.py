@@ -4,24 +4,17 @@ from sqlite3 import Connection
 
 from fastapi import APIRouter, Depends, Query
 
-from app.adapters.javdb_api import JavdbApiClient
 from app.contracts import DashboardOut, TaskHistoryItem, TaskOut
 from app.dependencies import get_connection, require_user
-from app.repositories.actors import ActorsRepository
 from app.repositories.catalog import CatalogRepository
-from app.repositories.follows import FollowsRepository
 from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.task_events import TaskEventsRepository
 from app.repositories.tasks import TasksRepository
-from app.services.follow_workflow import FollowWorkflowDependencies, FollowWorkflowService
 from app.services.integration_status import IntegrationStatusService
+from app.services.task_retry import TaskRetryDependencies, TaskRetryService
 
 router = APIRouter(prefix="/api", tags=["tasks"], dependencies=[Depends(require_user)])
-
-
-def get_client() -> JavdbApiClient:
-    return JavdbApiClient()
 
 
 @router.get("/tasks", response_model=list[TaskOut])
@@ -49,19 +42,15 @@ def list_tasks_by_work(
 def retry_task(
     task_id: int,
     connection: Connection = Depends(get_connection),
-    javdb: JavdbApiClient = Depends(get_client),
 ) -> dict[str, bool]:
-    FollowWorkflowService(
-        FollowWorkflowDependencies(
-            actors=ActorsRepository(connection),
-            follows=FollowsRepository(connection),
+    TaskRetryService(
+        TaskRetryDependencies(
             catalog=CatalogRepository(connection),
             tasks=TasksRepository(connection),
             logs=LogsRepository(connection),
             settings=SettingsRepository(connection),
-            javdb=javdb,
         )
-    ).retry_task(task_id)
+    ).retry(task_id)
     return {"ok": True}
 
 

@@ -3,6 +3,8 @@ import { client } from '../api';
 import { MoviePoster } from './MoviePoster';
 import type { Task } from '../types';
 import { formatDateTime, formatRelativeTime, taskElapsed, taskStageLabel } from '../lib/tasks';
+import { Loader2 } from 'lucide-react';
+import { useState } from 'react';
 
 type Props = {
   tasks: Task[];
@@ -65,14 +67,34 @@ function directoryLabel(task: Task): string {
 }
 
 function RetryButton({ taskId, onChanged }: { taskId: number; onChanged?: () => void }) {
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   async function retry() {
-    await client.retryTask(taskId);
-    onChanged?.();
+    setError(null);
+    setIsRetrying(true);
+    try {
+      await client.retryTask(taskId);
+      onChanged?.();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsRetrying(false);
+    }
   }
 
   return (
-    <button className="mt-3 min-h-11 w-full rounded-md border border-line px-3" onClick={retry} type="button">
-      手动重试
-    </button>
+    <div className="mt-3">
+      <button
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-line px-3 disabled:opacity-60"
+        disabled={isRetrying}
+        onClick={retry}
+        type="button"
+      >
+        {isRetrying ? <Loader2 className="animate-spin" size={16} /> : null}
+        {isRetrying ? '重试中' : '手动重试'}
+      </button>
+      {error ? <p className="mt-2 rounded-md bg-red-50 p-3 text-sm text-danger">{error}</p> : null}
+    </div>
   );
 }

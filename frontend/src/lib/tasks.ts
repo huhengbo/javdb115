@@ -16,6 +16,7 @@ export const stageLabels: Record<string, string> = {
   '115_task_missing': '115 任务不存在',
   duplicate_active: '发现重复进行中任务',
   duplicate_completed: '发现已完成任务',
+  manual_115_resubmitted: '手动重试已提交 115',
   manual_115_submitted: '手动提交 115'
 };
 

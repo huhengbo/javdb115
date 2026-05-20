@@ -10,7 +10,7 @@ from app.errors import IntegrationError
 
 class FakeP115Client:
     def __init__(self) -> None:
-        self.uploaded: tuple[str, str, str] | None = None
+        self.uploaded: tuple[bytes, str, str] | None = None
 
     def user_info(self, payload: dict[str, Any]) -> dict[str, Any]:
         assert payload == {"uid": "123"}
@@ -38,8 +38,8 @@ class FakeP115Client:
             },
         }
 
-    def upload_file(self, path: str, parent_id: str, *, filename: str) -> dict[str, Any]:
-        self.uploaded = (path, parent_id, filename)
+    def upload_file(self, content: bytes, parent_id: str, *, filename: str) -> dict[str, Any]:
+        self.uploaded = (content, parent_id, filename)
         return {"state": True, "file_id": "uploaded"}
 
 
@@ -146,6 +146,7 @@ def test_upload_bytes_uses_115_upload_file() -> None:
     client.upload_bytes("parent-dir", "movie.nfo", b"metadata")
 
     assert client.fake_client.uploaded is not None
-    _, parent_id, filename = client.fake_client.uploaded
+    content, parent_id, filename = client.fake_client.uploaded
+    assert content == b"metadata"
     assert parent_id == "parent-dir"
     assert filename == "movie.nfo"

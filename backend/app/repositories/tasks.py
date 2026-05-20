@@ -20,6 +20,10 @@ class TasksRepository:
     def list_by_work_code(self, code: str) -> list[dict[str, Any]]:
         return self._list_tasks("WHERE w.code = ?", (code,), None)
 
+    def get(self, task_id: int) -> dict[str, Any] | None:
+        tasks = self._list_tasks("WHERE t.id = ?", (task_id,), 1)
+        return tasks[0] if tasks else None
+
     def list_unfinished(self) -> list[dict[str, Any]]:
         placeholders = ", ".join("?" for _ in UNFINISHED_STATUSES)
         where_sql = f"WHERE t.status IN ({placeholders}) AND t.cloud_task_id IS NOT NULL"
@@ -37,7 +41,7 @@ class TasksRepository:
     def _list_tasks(
         self,
         where_sql: str,
-        params: tuple[str, ...],
+        params: tuple[object, ...],
         limit: int | None,
     ) -> list[dict[str, Any]]:
         limit_sql = "" if limit is None else "LIMIT ?"
