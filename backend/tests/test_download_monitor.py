@@ -15,6 +15,7 @@ from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.tasks import TasksRepository
 from app.services.download_monitor import DownloadMonitorDependencies, DownloadMonitorService
+from app.services.emby_metadata import EmbyMovieMetadata
 from app.services.organizer import CloudOrganizer
 
 
@@ -152,6 +153,30 @@ def test_organizer_preserves_code_variant_suffix_from_main_video_name() -> None:
     assert cloud.renamed == ("main-video", "SONE-801-UC.mkv")
 
 
+def test_organizer_uses_variant_code_in_metadata() -> None:
+    cloud = VariantSuffixCloud("SONE-801-UC")
+
+    CloudOrganizer(cast(Cloud115Client, cloud)).organize(
+        "source-dir",
+        "completed-root",
+        "SONE-801",
+        EmbyMovieMetadata(
+            code="SONE-801",
+            title="Sample",
+            release_date=None,
+            source_url="https://javdb.com/v/sample",
+            actors=[],
+            cover_url=None,
+        ),
+    )
+
+    assert cloud.uploaded_nfo is not None
+    content = cloud.uploaded_nfo.decode()
+    assert "<originaltitle>SONE-801-UC</originaltitle>" in content
+    assert "<tag>无码破解</tag>" in content
+    assert "<tag>中文字幕</tag>" in content
+
+
 def test_organizer_preserves_u_code_variant_suffix_from_main_video_name() -> None:
     cloud = VariantSuffixCloud("SONE-801-U")
 
@@ -270,6 +295,7 @@ class VariantSuffixCloud:
         self.filename_code = filename_code
         self.created_name: str | None = None
         self.renamed: tuple[str, str] | None = None
+        self.uploaded_nfo: bytes | None = None
 
     def list_items(self, parent_id: str) -> list[CloudItem]:
         if parent_id == "target-dir":
@@ -298,6 +324,11 @@ class VariantSuffixCloud:
 
     def delete(self, file_ids: list[str]) -> None:
         assert file_ids == ["source-dir"]
+
+    def upload_bytes(self, parent_id: str, filename: str, content: bytes) -> None:
+        assert parent_id == "target-dir"
+        if filename.endswith(".nfo"):
+            self.uploaded_nfo = content
 
 
 def create_submitted_task(connection: Connection, cloud_task_id: str) -> int:

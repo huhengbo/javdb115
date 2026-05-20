@@ -201,6 +201,7 @@ class DownloadMonitorService:
             source_url=str(work["source_url"]),
             actors=cast(list[str], work.get("actors") or []),
             cover_url=cast(str | None, work.get("cover_url")),
+            tags=[],
         )
 
     def _log_context(self, task: dict[str, Any]) -> dict[str, object]:

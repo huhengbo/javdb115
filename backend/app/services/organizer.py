@@ -262,6 +262,7 @@ class CloudOrganizer:
             source_url=metadata.source_url,
             actors=metadata.actors,
             cover_url=metadata.cover_url,
+            tags=metadata.tags,
         )
 
     def _is_video(self, name: str) -> bool:

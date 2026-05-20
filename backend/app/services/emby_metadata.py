@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from urllib.parse import urlparse
 from xml.etree import ElementTree
@@ -21,6 +21,12 @@ IMAGE_EXTENSIONS_BY_TYPE = {
     "image/webp": ".webp",
 }
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+BASE_TAGS = ("JavDB",)
+VARIANT_TAGS_BY_SUFFIX = {
+    "U": ("无码破解",),
+    "C": ("中文字幕",),
+    "UC": ("无码破解", "中文字幕"),
+}
 
 
 @dataclass(frozen=True)
@@ -31,6 +37,7 @@ class EmbyMovieMetadata:
     source_url: str
     actors: list[str]
     cover_url: str | None
+    tags: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -65,11 +72,31 @@ class EmbyMetadataBuilder:
         self._add_text(movie, "premiered", metadata.release_date)
         self._add_text(movie, "releasedate", metadata.release_date)
         self._add_text(movie, "studio", "JavDB")
-        self._add_text(movie, "tag", "JavDB")
+        for tag in self._tags(metadata):
+            self._add_text(movie, "tag", tag)
         self._add_text(movie, "plot", metadata.source_url)
         for actor in metadata.actors:
             self._add_actor(movie, actor)
         return movie
+
+    def _tags(self, metadata: EmbyMovieMetadata) -> list[str]:
+        tags = [*BASE_TAGS, *metadata.tags, *self._variant_tags(metadata.code)]
+        return self._unique_non_empty(tags)
+
+    def _variant_tags(self, code: str) -> list[str]:
+        suffix = code.rsplit("-", 1)[-1].upper() if "-" in code else ""
+        return list(VARIANT_TAGS_BY_SUFFIX.get(suffix, ()))
+
+    def _unique_non_empty(self, values: list[str]) -> list[str]:
+        seen: set[str] = set()
+        unique: list[str] = []
+        for value in values:
+            normalized = value.strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            unique.append(normalized)
+        return unique
 
     def _poster_image_asset(self, cover_url: str | None) -> list[MetadataAsset]:
         if not cover_url:
