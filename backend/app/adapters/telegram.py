@@ -40,7 +40,7 @@ class TelegramNotifier:
             return
         self._post("sendMessage", {"chat_id": self.chat_id, "text": f"{title}\n{caption}"})
 
-    def _post(self, method: str, payload: dict[str, str]) -> None:
+    def _post(self, method: str, payload: dict[str, object]) -> None:
         url = f"{TELEGRAM_API_BASE}/bot{self.bot_token}/{method}"
         response = httpx.post(url, json=payload, timeout=TELEGRAM_TIMEOUT_SECONDS)
         if response.is_success:
@@ -73,7 +73,10 @@ class TelegramBotVerifier:
         self._request_result("setMyCommands", {"commands": TELEGRAM_COMMANDS})
 
     def get_updates(self, offset: int | None = None) -> list[dict[str, Any]]:
-        payload: dict[str, object] = {"timeout": 0, "allowed_updates": ["message"]}
+        payload: dict[str, object] = {
+            "timeout": 0,
+            "allowed_updates": ["message", "callback_query"],
+        }
         if offset is not None:
             payload["offset"] = offset
         result = self._request_result("getUpdates", payload)
@@ -81,8 +84,34 @@ class TelegramBotVerifier:
             raise IntegrationError("Telegram getUpdates returned invalid response")
         return [item for item in result if isinstance(item, dict)]
 
-    def send_message(self, chat_id: str, text: str) -> None:
-        self._request_result("sendMessage", {"chat_id": chat_id, "text": text})
+    def send_message(
+        self,
+        chat_id: str,
+        text: str,
+        reply_markup: dict[str, object] | None = None,
+    ) -> None:
+        payload: dict[str, object] = {"chat_id": chat_id, "text": text}
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
+        self._request_result("sendMessage", payload)
+
+    def send_photo(
+        self,
+        chat_id: str,
+        photo: str,
+        caption: str,
+        reply_markup: dict[str, object] | None = None,
+    ) -> None:
+        payload: dict[str, object] = {"chat_id": chat_id, "photo": photo, "caption": caption}
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
+        self._request_result("sendPhoto", payload)
+
+    def answer_callback_query(self, callback_query_id: str, text: str | None = None) -> None:
+        payload: dict[str, object] = {"callback_query_id": callback_query_id}
+        if text:
+            payload["text"] = text
+        self._request_result("answerCallbackQuery", payload)
 
     def _request_result(
         self,

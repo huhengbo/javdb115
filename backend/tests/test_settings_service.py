@@ -14,6 +14,7 @@ from app.services.settings import (
     SettingsService,
 )
 from app.services.telegram_commands import TelegramCommandService
+from app.services.telegram_movies import TelegramMovieCard
 
 
 def test_public_settings_include_defaults_and_hide_obsolete_keys(tmp_path: Path) -> None:
@@ -226,6 +227,113 @@ def test_telegram_commands_status_and_check(monkeypatch, tmp_path: Path) -> None
         ("abc", "已开始检查演员订阅。"),
         ("abc", "演员订阅检查完成。"),
     ]
+
+
+def test_telegram_plain_text_queries_movie(monkeypatch, tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("telegram_bot_token", "bot-token", True)
+    sent_photos: list[tuple[str, str, str, dict[str, object] | None]] = []
+
+    class FakeTelegramBotVerifier:
+        def __init__(self, bot_token: str) -> None:
+            assert bot_token == "bot-token"
+
+        def set_commands(self) -> None:
+            return None
+
+        def get_updates(self, offset: int | None = None) -> list[dict]:
+            return [{"update_id": 12, "message": {"chat": {"id": "abc"}, "text": "ABC-123"}}]
+
+        def send_photo(
+            self,
+            chat_id: str,
+            photo: str,
+            caption: str,
+            reply_markup: dict[str, object] | None = None,
+        ) -> None:
+            sent_photos.append((chat_id, photo, caption, reply_markup))
+
+    monkeypatch.setattr(
+        "app.services.telegram_commands.TelegramBotVerifier",
+        FakeTelegramBotVerifier,
+    )
+
+    TelegramCommandService(
+        repository,
+        lambda: "状态",
+        lambda: None,
+        movie_handler=FakeMovieHandler(),
+    ).poll()
+
+    assert sent_photos[0][0] == "abc"
+    assert sent_photos[0][1] == "https://example.test/cover.jpg"
+    assert "ABC-123" in sent_photos[0][2]
+    assert sent_photos[0][3] is not None
+
+
+def test_telegram_movie_subscribe_callback(monkeypatch, tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("telegram_bot_token", "bot-token", True)
+    sent: list[tuple[str, str]] = []
+    answered: list[tuple[str, str | None]] = []
+    handler = FakeMovieHandler()
+
+    class FakeTelegramBotVerifier:
+        def __init__(self, bot_token: str) -> None:
+            assert bot_token == "bot-token"
+
+        def set_commands(self) -> None:
+            return None
+
+        def get_updates(self, offset: int | None = None) -> list[dict]:
+            return [
+                {
+                    "update_id": 13,
+                    "callback_query": {
+                        "id": "callback-1",
+                        "data": "movie_sub:movie-1",
+                        "message": {"chat": {"id": "abc"}},
+                    },
+                }
+            ]
+
+        def answer_callback_query(self, callback_query_id: str, text: str | None = None) -> None:
+            answered.append((callback_query_id, text))
+
+        def send_message(self, chat_id: str, text: str) -> None:
+            sent.append((chat_id, text))
+
+    monkeypatch.setattr(
+        "app.services.telegram_commands.TelegramBotVerifier",
+        FakeTelegramBotVerifier,
+    )
+
+    TelegramCommandService(repository, lambda: "状态", lambda: None, movie_handler=handler).poll()
+
+    assert handler.subscribed_movie_ids == ["movie-1"]
+    assert answered == [("callback-1", "开始处理")]
+    assert sent == [("abc", "已提交自动下载整理任务：#1")]
+
+
+class FakeMovieHandler:
+    def __init__(self) -> None:
+        self.subscribed_movie_ids: list[str] = []
+
+    def lookup(self, query: str) -> TelegramMovieCard | None:
+        assert query == "ABC-123"
+        return TelegramMovieCard(
+            movie_id="movie-1",
+            title="ABC-123 Sample",
+            caption="番号: ABC-123",
+            cover_url="https://example.test/cover.jpg",
+            source_url="https://javdb.com/v/movie-1",
+        )
+
+    def subscribe(self, movie_id: str) -> str:
+        self.subscribed_movie_ids.append(movie_id)
+        return "已提交自动下载整理任务：#1"
 
 
 def by_key(items: list[dict[str, object]]) -> dict[str, dict[str, object]]:

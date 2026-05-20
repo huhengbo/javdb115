@@ -25,6 +25,7 @@ from app.services.download_monitor import DownloadMonitorDependencies, DownloadM
 from app.services.follow_workflow import FollowWorkflowDependencies, FollowWorkflowService
 from app.services.settings import DEFAULT_CHECK_CRON
 from app.services.telegram_commands import TelegramCommandService
+from app.services.telegram_movies import TelegramMovieDependencies, TelegramMovieService
 
 DOWNLOAD_MONITOR_CRON = "* * * * *"
 TELEGRAM_COMMAND_CRON = "* * * * *"
@@ -80,7 +81,21 @@ def create_schedulers(connection: Connection) -> list[SchedulerService]:
         )
 
     def telegram_job() -> None:
-        TelegramCommandService(settings_repo, telegram_status, run_follow_check).poll()
+        TelegramCommandService(
+            settings_repo,
+            telegram_status,
+            run_follow_check,
+            movie_handler=TelegramMovieService(
+                TelegramMovieDependencies(
+                    actors=ActorsRepository(connection),
+                    catalog=CatalogRepository(connection),
+                    logs=LogsRepository(connection),
+                    settings=settings_repo,
+                    tasks=TasksRepository(connection),
+                    javdb=JavdbApiClient(),
+                )
+            ),
+        ).poll()
         connection.commit()
 
     check_scheduler = SchedulerService(check_cron_provider, check_job)
