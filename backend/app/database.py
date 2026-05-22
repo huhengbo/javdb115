@@ -77,9 +77,19 @@ class Database:
             "actor_avatar_url TEXT",
             "selected_tag_ids_json TEXT NOT NULL DEFAULT '[]'",
             "selected_tag_names_json TEXT NOT NULL DEFAULT '[]'",
+            "last_checked_at TEXT",
         )
         for column in follow_columns:
             self._ensure_column(connection, "follows", column)
+        connection.execute(
+            """
+            UPDATE follows
+            SET last_checked_at = updated_at
+            WHERE type = 'actor'
+              AND last_checked_at IS NULL
+              AND updated_at > created_at
+            """
+        )
 
     def _ensure_follow_seen_table(self, connection: sqlite3.Connection) -> None:
         connection.execute(

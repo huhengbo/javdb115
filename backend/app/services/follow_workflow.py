@@ -80,7 +80,7 @@ class FollowWorkflowService:
             str(follow["actor_external_id"]),
             cast(list[str], follow["selected_tag_ids"]),
         )
-        target_movies = self._new_movies(int(cast(int, follow["id"])), movies)
+        target_movies = self._new_movies(follow, movies)
         warnings: list[str] = []
         processed_count = 0
         for movie in target_movies:
@@ -99,12 +99,13 @@ class FollowWorkflowService:
                 )
         if not target_movies:
             self.follows.add_seen_movies(follow_id, self._movie_ids(movies))
-        self.follows.update_latest(follow_id, processed_count)
+        self.follows.mark_checked(follow_id, processed_count)
         return FollowWorkflowResult(processed_count, len(warnings), warnings)
 
-    def _new_movies(self, follow_id: int, movies: list[dict]) -> list[dict]:
+    def _new_movies(self, follow: dict[str, object], movies: list[dict]) -> list[dict]:
+        follow_id = int(cast(int, follow["id"]))
         seen = self.follows.list_seen_movie_ids(follow_id)
-        if not seen:
+        if not seen and not follow.get("last_checked_at"):
             return []
         return [movie for movie in movies if str(movie["id"]) not in seen]
 

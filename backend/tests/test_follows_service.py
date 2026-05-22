@@ -27,6 +27,25 @@ class PagedActorMoviesClient(JavdbApiClient):
         return self.pages.get(page, [])
 
 
+class SequenceActorMoviesClient(JavdbApiClient):
+    def __init__(self, responses: list[list[dict]]) -> None:
+        super().__init__()
+        self.responses = responses
+        self.calls = 0
+
+    def actor_movies(
+        self,
+        actor_id: str,
+        tag_ids: list[str] | None = None,
+        sort_type: int = 0,
+        page: int = 1,
+        limit: int = 24,
+    ) -> list[dict]:
+        response = self.responses[self.calls]
+        self.calls += 1
+        return response
+
+
 def test_baseline_records_configured_first_page_scope_used_by_checks(tmp_path: Path) -> None:
     connection = setup_database(tmp_path).connect()
     repository = FollowsRepository(connection)
@@ -54,6 +73,29 @@ def test_baseline_records_configured_first_page_scope_used_by_checks(tmp_path: P
         "new-1"
     }
     assert client.calls == [(1, 3), (1, 3)]
+
+
+def test_empty_baseline_does_not_swallow_first_later_match(tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = FollowsRepository(connection)
+    follow = repository.save(
+        "actor-1",
+        "Actor One",
+        "https://javdb.com/actors/actor-1",
+        None,
+        ["m", "s"],
+        ["含磁链", "单体作品"],
+    )
+    client = SequenceActorMoviesClient([[], [movie("new-1")]])
+    service = FollowsService(repository, client)
+
+    service.baseline(follow)
+    checked_follow = repository.get(int(cast(int, follow["id"]))) or follow
+    result = service.check_one(checked_follow)
+
+    assert result["new_count"] == 1
+    assert [item["id"] for item in result["movies"]] == ["new-1"]
+    assert repository.list_seen_movie_ids(int(cast(int, follow["id"]))) == {"new-1"}
 
 
 def movie(movie_id: str) -> dict:

@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS follows (
   selected_tag_ids_json TEXT NOT NULL DEFAULT '[]',
   selected_tag_names_json TEXT NOT NULL DEFAULT '[]',
   latest_count INTEGER DEFAULT 0,
+  last_checked_at TEXT,
   enabled INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL

@@ -132,6 +132,17 @@ class FollowsRepository:
             (count, iso_now(), follow_id),
         )
 
+    def mark_checked(self, follow_id: int, count: int) -> None:
+        now = iso_now()
+        self.connection.execute(
+            """
+            UPDATE follows
+            SET latest_count = ?, last_checked_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (count, now, now, follow_id),
+        )
+
     def list_seen_movie_ids(self, follow_id: int) -> set[str]:
         rows = self.connection.execute(
             "SELECT movie_id FROM follow_seen_movies WHERE follow_id = ?",
@@ -240,6 +251,7 @@ class FollowsRepository:
             "selected_tag_names": self._parse_json_list(row.get("selected_tag_names_json")),
             "type": row["type"],
             "latest_count": int(row.get("latest_count") or 0),
+            "last_checked_at": row.get("last_checked_at"),
             "enabled": bool(row["enabled"]),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],

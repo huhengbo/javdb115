@@ -48,6 +48,25 @@ class FollowWorkflowClient(JavdbApiClient):
         return [{"hash": "hash-1", "name": "ONE-001.torrent", "size": 4096}]
 
 
+class SequenceFollowWorkflowClient(FollowWorkflowClient):
+    def __init__(self, responses: list[list[dict]]) -> None:
+        super().__init__()
+        self.responses = responses
+        self.calls = 0
+
+    def actor_movies(
+        self,
+        actor_id: str,
+        tag_ids: list[str] | None = None,
+        sort_type: int = 0,
+        page: int = 1,
+        limit: int = 24,
+    ) -> list[dict]:
+        response = self.responses[self.calls]
+        self.calls += 1
+        return response
+
+
 class ManualClient:
     def movie_detail(self, movie_id: str) -> dict:
         assert movie_id == "abc123"
@@ -171,6 +190,25 @@ def test_follow_workflow_creates_submitted_task(monkeypatch, tmp_path: Path) -> 
     assert task["actor"]["name"] == "Actor One"
 
 
+def test_follow_workflow_processes_first_match_after_empty_baseline(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    connection = setup_follow_database(monkeypatch, tmp_path)
+    follow = actor_follow(connection, ["m", "s"], ["含磁链", "单体作品"])
+    client = SequenceFollowWorkflowClient([[], [movie_summary()]])
+    service = FollowWorkflowService(follow_dependencies(connection, client))
+
+    first = service.check_follow(int(cast(int, follow["id"])))
+    second = service.check_follow(int(cast(int, follow["id"])))
+
+    task = TasksRepository(connection).list_all()[0]
+    assert first.processed_count == 0
+    assert second.processed_count == 1
+    assert task["status"] == "submitted"
+    assert task["work"]["code"] == "ONE-001"
+
+
 def test_follow_workflow_retry_uses_follow_rule(monkeypatch, tmp_path: Path) -> None:
     connection = setup_follow_database(monkeypatch, tmp_path)
     follow = actor_follow(connection, ["s"], ["单体作品"])
@@ -252,7 +290,10 @@ def manual_dependencies(connection: Any) -> ManualOfflineDependencies:
     )
 
 
-def follow_dependencies(connection: Any) -> FollowWorkflowDependencies:
+def follow_dependencies(
+    connection: Any,
+    javdb: JavdbApiClient | None = None,
+) -> FollowWorkflowDependencies:
     return FollowWorkflowDependencies(
         actors=ActorsRepository(connection),
         follows=FollowsRepository(connection),
@@ -260,7 +301,7 @@ def follow_dependencies(connection: Any) -> FollowWorkflowDependencies:
         tasks=TasksRepository(connection),
         logs=LogsRepository(connection),
         settings=SettingsRepository(connection),
-        javdb=FollowWorkflowClient(),
+        javdb=javdb or FollowWorkflowClient(),
     )
 
 

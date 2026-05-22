@@ -25,9 +25,9 @@ class FollowsService:
             actor_external_id,
             selected_tag_ids,
         )
-        new_movies = self._new_movies(follow_id, movies)
+        new_movies = self._new_movies(follow, movies)
         self.repository.add_seen_movies(follow_id, self._movie_ids(movies))
-        self.repository.update_latest(follow_id, len(new_movies))
+        self.repository.mark_checked(follow_id, len(new_movies))
         return {
             "follow_id": follow_id,
             "actor_external_id": actor_external_id,
@@ -47,11 +47,12 @@ class FollowsService:
         )
         self.repository.reset_seen_movies(follow_id)
         self.repository.add_seen_movies(follow_id, self._movie_ids(movies))
-        self.repository.update_latest(follow_id, 0)
+        self.repository.mark_checked(follow_id, 0)
 
-    def _new_movies(self, follow_id: int, movies: list[dict]) -> list[dict]:
+    def _new_movies(self, follow: dict, movies: list[dict]) -> list[dict]:
+        follow_id = int(follow["id"])
         seen = self.repository.list_seen_movie_ids(follow_id)
-        if not seen:
+        if not seen and not follow.get("last_checked_at"):
             return []
         return [movie for movie in movies if str(movie["id"]) not in seen]
 
