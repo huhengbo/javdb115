@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from sqlite3 import Connection
-from typing import cast
+from typing import Any, cast
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 
@@ -24,7 +24,7 @@ def get_api_client() -> JavdbApiClient:
 
 
 @router.get("", response_model=list[FollowOut])
-def list_follows(connection: Connection = Depends(get_connection)) -> list[dict]:
+def list_follows(connection: Connection = Depends(get_connection)) -> list[dict[str, Any]]:
     return FollowsRepository(connection).list_all()
 
 
@@ -33,7 +33,7 @@ def create_follow(
     payload: FollowCreate,
     background_tasks: BackgroundTasks,
     connection: Connection = Depends(get_connection),
-) -> dict:
+) -> dict[str, Any]:
     repository = FollowsRepository(connection)
     follow = repository.save(
         payload.actor_external_id,
@@ -55,7 +55,7 @@ def update_follow(
     payload: FollowUpdate,
     background_tasks: BackgroundTasks,
     connection: Connection = Depends(get_connection),
-) -> dict:
+) -> dict[str, Any]:
     repository = FollowsRepository(connection)
     result = repository.update(
         follow_id,
@@ -110,7 +110,7 @@ def check_follow(
     follow_id: int,
     connection: Connection = Depends(get_connection),
     api_client: JavdbApiClient = Depends(get_api_client),
-) -> dict:
+) -> dict[str, Any]:
     repository = FollowsRepository(connection)
     follow = repository.get(follow_id)
     if not follow:
@@ -122,6 +122,6 @@ def check_follow(
 def check_all(
     connection: Connection = Depends(get_connection),
     api_client: JavdbApiClient = Depends(get_api_client),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     repository = FollowsRepository(connection)
     return FollowsService(repository, api_client).check_all()

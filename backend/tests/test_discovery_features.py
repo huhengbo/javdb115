@@ -4,13 +4,18 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-from app.adapters.javdb_api import JavdbApiClient
+from app.adapters.javdb_api import JavdbApiClient, JavdbApiResponseCache
 from app.database import Database
 from app.repositories.follows import FollowsRepository
 
 
 class ActorMoviesClient(JavdbApiClient):
-    def __init__(self, actor_type: int, movies: list[dict], details: dict[str, dict]) -> None:
+    def __init__(
+        self,
+        actor_type: int,
+        movies: list[dict[str, Any]],
+        details: dict[str, dict[str, Any]],
+    ) -> None:
         super().__init__()
         self.actor_type = actor_type
         self.movies = movies
@@ -18,7 +23,7 @@ class ActorMoviesClient(JavdbApiClient):
         self.calls: list[tuple[str, str, int, int]] = []
         self.detail_calls: list[str] = []
 
-    def actor_detail(self, actor_id: str) -> dict:
+    def actor_detail(self, actor_id: str) -> dict[str, Any]:
         return {"id": actor_id, "type": self.actor_type}
 
     def movies_by_tag(
@@ -27,11 +32,11 @@ class ActorMoviesClient(JavdbApiClient):
         sort_by: str = "update",
         page: int = 1,
         limit: int = 24,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         self.calls.append((filter_by, sort_by, page, limit))
         return self.movies[:limit]
 
-    def movie_detail(self, movie_id: str) -> dict:
+    def movie_detail(self, movie_id: str) -> dict[str, Any]:
         self.detail_calls.append(movie_id)
         return self.details[movie_id]
 
@@ -227,6 +232,29 @@ def test_movie_reviews_forwards_hot_sort_parameters() -> None:
     assert reviews == [{"id": 1, "content": "ok"}]
     assert browser.calls[0][0] == "/api/v1/movies/movie-1/reviews"
     assert "page=2&sort_by=hotly&limit=7" in browser.calls[0][1]
+
+
+def test_javdb_api_client_caches_successful_responses() -> None:
+    browser = ApiCaptureBrowser()
+    cache = JavdbApiResponseCache(max_entries=10)
+    client = JavdbApiClient(cast(Any, browser), cache=cache)
+
+    first = client.rankings(rtype="1", period="today")
+    second = client.rankings(rtype="1", period="today")
+
+    assert first == second
+    assert len(browser.calls) == 1
+
+
+def test_javdb_api_cache_key_includes_query() -> None:
+    browser = ApiCaptureBrowser()
+    cache = JavdbApiResponseCache(max_entries=10)
+    client = JavdbApiClient(cast(Any, browser), cache=cache)
+
+    client.rankings(rtype="1", period="today")
+    client.rankings(rtype="2", period="today")
+
+    assert len(browser.calls) == 2
 
 
 def test_follows_repository_normalizes_legacy_tag_ids(tmp_path: Path) -> None:

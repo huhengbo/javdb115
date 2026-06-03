@@ -17,7 +17,7 @@ from app.repositories.settings import SettingsRepository
 from app.repositories.tasks import TasksRepository
 from app.services.download_monitor import DownloadMonitorDependencies, DownloadMonitorService
 from app.services.emby_metadata import EmbyMovieMetadata
-from app.services.organizer import CloudOrganizer
+from app.services.organizer import CloudOrganizer, OrganizeRequest
 
 
 class CompletedCloud:
@@ -29,7 +29,7 @@ class CompletedCloud:
 
     def get_offline_tasks(self, task_ids: set[str]) -> dict[str, CloudOfflineTask]:
         assert task_ids == {"done-hash"}
-        return {"done-hash": CloudOfflineTask("done-hash", "completed", "source-dir", 100, None)}
+        return {"done-hash": completed_remote_task()}
 
     def list_items(self, parent_id: str) -> list[CloudItem]:
         if parent_id == "target-dir":
@@ -42,6 +42,8 @@ class CompletedCloud:
         ]
 
     def list_directories(self, parent_id: str) -> list[CloudDirectory]:
+        if parent_id == "download-root":
+            return [CloudDirectory("source-dir", "ABC-123", None, True)]
         assert parent_id == "completed-root"
         return []
 
@@ -69,6 +71,12 @@ class FailedCloud:
         return {"bad-hash": CloudOfflineTask("bad-hash", "failed", None, None, "资源失效")}
 
 
+class WrongDownloadRootCloud(CompletedCloud):
+    def get_offline_tasks(self, task_ids: set[str]) -> dict[str, CloudOfflineTask]:
+        assert task_ids == {"done-hash"}
+        return {"done-hash": completed_remote_task(download_root_id="other-root")}
+
+
 class DownloadingCloud:
     def get_offline_tasks(self, task_ids: set[str]) -> dict[str, CloudOfflineTask]:
         assert task_ids == {"run-hash"}
@@ -82,6 +90,8 @@ class PartialMoveCloud:
         self.created = False
 
     def list_directories(self, parent_id: str) -> list[CloudDirectory]:
+        if parent_id == "download-root":
+            return [CloudDirectory("source-dir", "ABC-123", None, True)]
         assert parent_id == "completed-root"
         return [CloudDirectory("target-dir", "ABC-123", None, True)]
 
@@ -154,11 +164,7 @@ def test_monitor_organizes_completed_task(monkeypatch: MonkeyPatch, tmp_path: Pa
 def test_organizer_preserves_code_variant_suffix_from_main_video_name() -> None:
     cloud = VariantSuffixCloud()
 
-    plan = CloudOrganizer(cast(Cloud115Client, cloud)).organize(
-        "source-dir",
-        "completed-root",
-        "SONE-801",
-    )
+    plan = CloudOrganizer(cast(Cloud115Client, cloud)).organize(organize_request("SONE-801"))
 
     assert plan.target_dir_id == "target-dir"
     assert cloud.created_name == "SONE-801-UC"
@@ -169,17 +175,17 @@ def test_organizer_uses_variant_code_in_metadata() -> None:
     cloud = VariantSuffixCloud("SONE-801-UC")
 
     CloudOrganizer(cast(Cloud115Client, cloud)).organize(
-        "source-dir",
-        "completed-root",
-        "SONE-801",
-        EmbyMovieMetadata(
-            code="SONE-801",
-            title="Sample",
-            release_date=None,
-            source_url="https://javdb.com/v/sample",
-            actors=[],
-            cover_url=None,
-        ),
+        organize_request(
+            "SONE-801",
+            EmbyMovieMetadata(
+                code="SONE-801",
+                title="Sample",
+                release_date=None,
+                source_url="https://javdb.com/v/sample",
+                actors=[],
+                cover_url=None,
+            ),
+        )
     )
 
     assert cloud.uploaded_nfo is not None
@@ -192,11 +198,7 @@ def test_organizer_uses_variant_code_in_metadata() -> None:
 def test_organizer_preserves_u_code_variant_suffix_from_main_video_name() -> None:
     cloud = VariantSuffixCloud("SONE-801-U")
 
-    CloudOrganizer(cast(Cloud115Client, cloud)).organize(
-        "source-dir",
-        "completed-root",
-        "SONE-801",
-    )
+    CloudOrganizer(cast(Cloud115Client, cloud)).organize(organize_request("SONE-801"))
 
     assert cloud.created_name == "SONE-801-U"
     assert cloud.renamed == ("main-video", "SONE-801-U.mkv")
@@ -205,11 +207,7 @@ def test_organizer_preserves_u_code_variant_suffix_from_main_video_name() -> Non
 def test_organizer_preserves_c_code_variant_suffix_from_main_video_name() -> None:
     cloud = VariantSuffixCloud("SONE-801-C")
 
-    CloudOrganizer(cast(Cloud115Client, cloud)).organize(
-        "source-dir",
-        "completed-root",
-        "SONE-801",
-    )
+    CloudOrganizer(cast(Cloud115Client, cloud)).organize(organize_request("SONE-801"))
 
     assert cloud.created_name == "SONE-801-C"
     assert cloud.renamed == ("main-video", "SONE-801-C.mkv")
@@ -254,14 +252,33 @@ def test_monitor_marks_running_task_as_downloading(
     assert task["stage"] == "115_downloading"
 
 
+def test_monitor_refuses_remote_download_root_mismatch(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    database = setup_database(tmp_path)
+    connection = database.connect()
+    create_submitted_task(connection, "done-hash")
+    cloud = WrongDownloadRootCloud()
+    monkeypatch.setattr(
+        "app.services.download_monitor.CloudServiceFactory.create",
+        lambda self: cloud,
+    )
+
+    result = service(connection).poll_unfinished()
+    task = TasksRepository(connection).list_all()[0]
+
+    assert result.failed_count == 1
+    assert task["status"] == "failed"
+    assert task["stage"] == "115_organize_failed"
+    assert "configured download folder" in task["error_message"]
+    assert cloud.deleted == []
+
+
 def test_organizer_recovers_after_main_video_was_already_moved() -> None:
     cloud = PartialMoveCloud()
 
-    plan = CloudOrganizer(cast(Cloud115Client, cloud)).organize(
-        "source-dir",
-        "completed-root",
-        "ABC-123",
-    )
+    plan = CloudOrganizer(cast(Cloud115Client, cloud)).organize(organize_request("ABC-123"))
 
     assert plan.target_dir_id == "target-dir"
     assert plan.main_video.id == "main-video"
@@ -274,15 +291,49 @@ def test_organizer_refuses_to_delete_when_source_is_target() -> None:
     cloud = SameSourceTargetCloud()
 
     try:
-        CloudOrganizer(cast(Cloud115Client, cloud)).organize(
-            "source-dir",
-            "completed-root",
-            "ABC-123",
-        )
+        CloudOrganizer(cast(Cloud115Client, cloud)).organize(organize_request("ABC-123"))
     except ValueError as exc:
         assert "source folder and target folder are the same" in str(exc)
     else:
         raise AssertionError("Expected organizer to refuse same source and target folders")
+    assert cloud.deleted == []
+
+
+def test_organizer_refuses_source_outside_download_root() -> None:
+    cloud = SourceOutsideDownloadCloud()
+
+    try:
+        CloudOrganizer(cast(Cloud115Client, cloud)).organize(organize_request("ABC-123"))
+    except ValueError as exc:
+        assert "not under the configured download folder" in str(exc)
+    else:
+        raise AssertionError("Expected organizer to refuse source outside download root")
+    assert cloud.deleted == []
+
+
+def test_organizer_refuses_remote_source_name_mismatch() -> None:
+    cloud = CompletedCloud()
+
+    try:
+        CloudOrganizer(cast(Cloud115Client, cloud)).organize(
+            organize_request("ABC-123", source_dir_name="OTHER")
+        )
+    except ValueError as exc:
+        assert "remote source path does not match" in str(exc)
+    else:
+        raise AssertionError("Expected organizer to reject mismatched remote source path")
+    assert cloud.deleted == []
+
+
+def test_organizer_ignores_directory_named_like_video() -> None:
+    cloud = DirectoryNamedVideoCloud()
+
+    try:
+        CloudOrganizer(cast(Cloud115Client, cloud)).organize(organize_request("ABC-123"))
+    except ValueError as exc:
+        assert "No video file found" in str(exc)
+    else:
+        raise AssertionError("Expected organizer to reject a directory named as a video")
     assert cloud.deleted == []
 
 
@@ -291,12 +342,44 @@ class SameSourceTargetCloud:
         self.deleted: list[str] = []
 
     def list_directories(self, parent_id: str) -> list[CloudDirectory]:
+        if parent_id == "download-root":
+            return [CloudDirectory("source-dir", "ABC-123", None, True)]
         assert parent_id == "completed-root"
         return [CloudDirectory("source-dir", "ABC-123", None, True)]
 
     def list_items(self, parent_id: str) -> list[CloudItem]:
         assert parent_id == "source-dir"
         return [CloudItem("main-video", "ABC-123.mkv", 500, False)]
+
+    def delete(self, file_ids: list[str]) -> None:
+        self.deleted.extend(file_ids)
+
+
+class SourceOutsideDownloadCloud:
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+
+    def list_directories(self, parent_id: str) -> list[CloudDirectory]:
+        assert parent_id == "download-root"
+        return []
+
+    def delete(self, file_ids: list[str]) -> None:
+        self.deleted.extend(file_ids)
+
+
+class DirectoryNamedVideoCloud:
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+
+    def list_directories(self, parent_id: str) -> list[CloudDirectory]:
+        if parent_id == "download-root":
+            return [CloudDirectory("source-dir", "ABC-123", None, True)]
+        assert parent_id == "completed-root"
+        return []
+
+    def list_items(self, parent_id: str) -> list[CloudItem]:
+        assert parent_id == "source-dir"
+        return [CloudItem("folder-video", "ABC-123.mp4", None, True)]
 
     def delete(self, file_ids: list[str]) -> None:
         self.deleted.extend(file_ids)
@@ -319,6 +402,8 @@ class VariantSuffixCloud:
         ]
 
     def list_directories(self, parent_id: str) -> list[CloudDirectory]:
+        if parent_id == "download-root":
+            return [CloudDirectory("source-dir", "SONE-801", None, True)]
         assert parent_id == "completed-root"
         return []
 
@@ -367,8 +452,30 @@ def create_submitted_task(connection: Connection, cloud_task_id: str) -> int:
     tasks = TasksRepository(connection)
     task_id = tasks.create(work_id, None, magnet_id)
     tasks.update_status(task_id, "submitted", "manual_115_submitted", cloud_task_id=cloud_task_id)
+    SettingsRepository(connection).upsert("p115_download_dir_id", "download-root", False)
     SettingsRepository(connection).upsert("p115_completed_dir_id", "completed-root", False)
     return task_id
+
+
+def organize_request(
+    code: str,
+    metadata: EmbyMovieMetadata | None = None,
+    source_dir_name: str | None = None,
+) -> OrganizeRequest:
+    return OrganizeRequest(
+        source_dir_id="source-dir",
+        download_root_id="download-root",
+        completed_root_id="completed-root",
+        code=code,
+        source_dir_name=source_dir_name or code,
+        metadata=metadata,
+    )
+
+
+def completed_remote_task(download_root_id: str = "download-root") -> CloudOfflineTask:
+    return CloudOfflineTask(
+        "done-hash", "completed", "source-dir", 100, None, "ABC-123", download_root_id
+    )
 
 
 def service(connection: Connection) -> DownloadMonitorService:

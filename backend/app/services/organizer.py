@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 
 from app.adapters.cloud115 import Cloud115Client
-from app.adapters.cloud115_types import CloudItem
+from app.adapters.cloud115_types import CloudDirectory, CloudItem
 from app.services.emby_metadata import EmbyMetadataBuilder, EmbyMovieMetadata, MetadataAsset
 
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".m4v"}
@@ -22,39 +22,44 @@ class CleanupPlan:
     target_dir_name: str = ""
 
 
+@dataclass(frozen=True)
+class OrganizeRequest:
+    source_dir_id: str
+    download_root_id: str
+    completed_root_id: str
+    code: str
+    source_dir_name: str | None = None
+    metadata: EmbyMovieMetadata | None = None
+
+
 class CloudOrganizer:
     def __init__(self, cloud: Cloud115Client) -> None:
         self.cloud = cloud
 
-    def organize(
-        self,
-        source_dir_id: str,
-        completed_root_id: str,
-        code: str,
-        metadata: EmbyMovieMetadata | None = None,
-    ) -> CleanupPlan:
-        existing_target = self._existing_target_directory(completed_root_id, code)
+    def organize(self, request: OrganizeRequest) -> CleanupPlan:
+        self._validate_source_directory(request)
+        existing_target = self._existing_target_directory(request.completed_root_id, request.code)
         if existing_target:
             target_dir_id, target_code = existing_target
-            self._ensure_distinct_directories(source_dir_id, target_dir_id)
+            self._ensure_distinct_directories(request.source_dir_id, target_dir_id)
             existing_main = self._existing_main_video(target_dir_id, target_code)
             if existing_main:
-                self._replace_metadata(target_dir_id, self._metadata(metadata, target_code))
+                self._replace_metadata(target_dir_id, self._metadata(request.metadata, target_code))
                 return self._clean_after_partial_move(
-                    source_dir_id,
+                    request.source_dir_id,
                     target_dir_id,
                     target_code,
                     existing_main,
                 )
-        items = self.cloud.list_items(source_dir_id)
+        items = self.cloud.list_items(request.source_dir_id)
         main_video = self._main_video(items)
-        organized_code = self._organized_code(code, main_video.name)
-        target_dir_id = self._target_directory_id(completed_root_id, organized_code)
-        self._ensure_distinct_directories(source_dir_id, target_dir_id)
+        organized_code = self._organized_code(request.code, main_video.name)
+        target_dir_id = self._target_directory_id(request.completed_root_id, organized_code)
+        self._ensure_distinct_directories(request.source_dir_id, target_dir_id)
         existing_main = self._existing_main_video(target_dir_id, organized_code)
         if existing_main:
             return self._clean_after_partial_move(
-                source_dir_id,
+                request.source_dir_id,
                 target_dir_id,
                 organized_code,
                 existing_main,
@@ -64,10 +69,10 @@ class CloudOrganizer:
         self.cloud.rename(plan.main_video.id, f"{organized_code}{extension}")
         self._rename_subtitles(items, plan.main_video.id, organized_code)
         self.cloud.move(plan.keep_ids, target_dir_id)
-        self._replace_metadata(target_dir_id, self._metadata(metadata, organized_code))
+        self._replace_metadata(target_dir_id, self._metadata(request.metadata, organized_code))
         if plan.delete_ids:
             self.cloud.delete(plan.delete_ids)
-        self._delete_source_directory(source_dir_id)
+        self._delete_source_directory(request.source_dir_id)
         return CleanupPlan(
             plan.main_video,
             plan.target_dir_id,
@@ -84,7 +89,7 @@ class CloudOrganizer:
         main_video: CloudItem,
     ) -> CleanupPlan:
         items = self.cloud.list_items(source_dir_id)
-        subtitles = [item for item in items if self._is_subtitle(item.name)]
+        subtitles = [item for item in items if self._is_subtitle_file(item)]
         keep_ids = [item.id for item in subtitles]
         delete_ids = [item.id for item in items if item.id not in keep_ids]
         self._rename_subtitle_items(subtitles, target_dir_name)
@@ -99,6 +104,28 @@ class CloudOrganizer:
         if source_dir_id == target_dir_id:
             raise ValueError("115 source folder and target folder are the same; refusing cleanup")
 
+    def _validate_source_directory(self, request: OrganizeRequest) -> None:
+        self._ensure_not_protected_directory(request)
+        source = self._source_child_directory(request)
+        self._ensure_source_name_matches(source.name, request)
+
+    def _ensure_not_protected_directory(self, request: OrganizeRequest) -> None:
+        protected_ids = {"0", request.download_root_id, request.completed_root_id}
+        if request.source_dir_id in protected_ids:
+            raise ValueError("115 source folder is protected; refusing cleanup")
+
+    def _source_child_directory(self, request: OrganizeRequest) -> CloudDirectory:
+        for directory in self.cloud.list_directories(request.download_root_id):
+            if directory.id == request.source_dir_id:
+                return directory
+        raise ValueError("115 source folder is not under the configured download folder")
+
+    def _ensure_source_name_matches(self, actual_name: str, request: OrganizeRequest) -> None:
+        if actual_name.casefold() != request.code.casefold():
+            raise ValueError("115 source folder name does not match the current task code")
+        if request.source_dir_name and request.source_dir_name.casefold() != actual_name.casefold():
+            raise ValueError("115 remote source path does not match the source folder")
+
     def _delete_source_directory(self, source_dir_id: str) -> None:
         self.cloud.delete([source_dir_id])
 
@@ -109,7 +136,7 @@ class CloudOrganizer:
         return CleanupPlan(main_video, target_dir_id, keep_ids, delete_ids)
 
     def _main_video(self, items: list[CloudItem]) -> CloudItem:
-        videos = [item for item in items if self._is_video(item.name)]
+        videos = [item for item in items if self._is_video_file(item)]
         if not videos:
             raise ValueError("No video file found in 115 completed folder")
         return max(videos, key=lambda item: item.size_bytes or 0)
@@ -135,8 +162,7 @@ class CloudOrganizer:
         code: str,
     ) -> tuple[str, str] | None:
         candidates = {
-            candidate.casefold(): candidate
-            for candidate in self._target_code_candidates(code)
+            candidate.casefold(): candidate for candidate in self._target_code_candidates(code)
         }
         for directory in self.cloud.list_directories(completed_root_id):
             target_code = candidates.get(directory.name.casefold())
@@ -158,14 +184,14 @@ class CloudOrganizer:
     def _existing_main_video(self, target_dir_id: str, code: str) -> CloudItem | None:
         for item in self.cloud.list_items(target_dir_id):
             expected_name = f"{code}{self._extension(item.name)}"
-            if item.name.casefold() == expected_name.casefold() and self._is_video(item.name):
+            if item.name.casefold() == expected_name.casefold() and self._is_video_file(item):
                 return item
         return None
 
     def _should_keep(self, item: CloudItem, main_video_id: str) -> bool:
         if item.id == main_video_id:
             return True
-        return self._is_subtitle(item.name)
+        return self._is_subtitle_file(item)
 
     def _rename_subtitles(
         self,
@@ -174,9 +200,7 @@ class CloudOrganizer:
         code: str,
     ) -> None:
         subtitles = [
-            item
-            for item in items
-            if item.id != main_video_id and self._is_subtitle(item.name)
+            item for item in items if item.id != main_video_id and self._is_subtitle_file(item)
         ]
         self._rename_subtitle_items(subtitles, code)
 
@@ -268,8 +292,14 @@ class CloudOrganizer:
     def _is_video(self, name: str) -> bool:
         return self._extension(name) in VIDEO_EXTENSIONS
 
+    def _is_video_file(self, item: CloudItem) -> bool:
+        return not item.is_directory and self._is_video(item.name)
+
     def _is_subtitle(self, name: str) -> bool:
         return self._extension(name) in SUBTITLE_EXTENSIONS
+
+    def _is_subtitle_file(self, item: CloudItem) -> bool:
+        return not item.is_directory and self._is_subtitle(item.name)
 
     def _extension(self, name: str) -> str:
         match = re.search(r"(\.[A-Za-z0-9]+)$", name)

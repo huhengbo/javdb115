@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 from app.adapters.javdb_api import JavdbApiClient
 from app.contracts import ActorCreate
@@ -17,6 +17,7 @@ from app.repositories.task_events import TaskEventsRepository
 from app.repositories.tasks import TasksRepository
 from app.services.actor_movie_scan import collect_actor_movies
 from app.services.cloud import CloudServiceFactory
+from app.services.javdb_movie_payload import fetch_javdb_movie_payload
 from app.services.magnet_filter import MagnetDecision, MagnetFilter
 from app.services.notifier import NotificationService
 from app.services.settings import SettingsService
@@ -102,14 +103,18 @@ class FollowWorkflowService:
         self.follows.mark_checked(follow_id, processed_count)
         return FollowWorkflowResult(processed_count, len(warnings), warnings)
 
-    def _new_movies(self, follow: dict[str, object], movies: list[dict]) -> list[dict]:
+    def _new_movies(
+        self,
+        follow: dict[str, object],
+        movies: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         follow_id = int(cast(int, follow["id"]))
         seen = self.follows.list_seen_movie_ids(follow_id)
         if not seen and not follow.get("last_checked_at"):
             return []
         return [movie for movie in movies if str(movie["id"]) not in seen]
 
-    def _movie_ids(self, movies: list[dict]) -> list[str]:
+    def _movie_ids(self, movies: list[dict[str, Any]]) -> list[str]:
         return [str(movie["id"]) for movie in movies]
 
     def retry_task(self, task_id: int) -> None:
@@ -148,7 +153,7 @@ class FollowWorkflowService:
         )
         return int(cast(int, actor["id"]))
 
-    def _process_movie(self, actor_id: int, movie: dict) -> None:
+    def _process_movie(self, actor_id: int, movie: dict[str, Any]) -> None:
         work = self._to_work(movie)
         if self.tasks.find_blocking_duplicate_by_code(work.code):
             self.logs.add(
@@ -170,10 +175,11 @@ class FollowWorkflowService:
             return
         self._submit(SubmitRequest(actor_id, work_id, work, best))
 
-    def _to_work(self, movie: dict) -> JavdbWork:
+    def _to_work(self, movie: dict[str, Any]) -> JavdbWork:
         movie_id = str(movie["id"])
-        detail = self.javdb.movie_detail(movie_id)
-        magnets = self._to_magnets(self.javdb.movie_magnets(movie_id))
+        payload = fetch_javdb_movie_payload(self.javdb, movie_id)
+        detail = payload.detail
+        magnets = self._to_magnets(payload.magnets)
         actors = [str(actor.get("name")) for actor in detail.get("actors", []) if actor.get("name")]
         return JavdbWork(
             code=str(detail.get("number") or movie["number"]),
@@ -187,7 +193,7 @@ class FollowWorkflowService:
             magnets=magnets,
         )
 
-    def _to_magnets(self, items: list[dict]) -> list[JavdbMagnet]:
+    def _to_magnets(self, items: list[dict[str, Any]]) -> list[JavdbMagnet]:
         magnets: list[JavdbMagnet] = []
         for item in items:
             magnet_hash = str(item.get("hash") or "")

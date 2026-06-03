@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from app.adapters.javdb_api import JavdbApiClient
 from app.database import Database
@@ -10,7 +10,7 @@ from app.services.follows import FollowsService
 
 
 class PagedActorMoviesClient(JavdbApiClient):
-    def __init__(self, pages: dict[int, list[dict]]) -> None:
+    def __init__(self, pages: dict[int, list[dict[str, Any]]]) -> None:
         super().__init__()
         self.pages = pages
         self.calls: list[tuple[int, int]] = []
@@ -22,13 +22,13 @@ class PagedActorMoviesClient(JavdbApiClient):
         sort_type: int = 0,
         page: int = 1,
         limit: int = 24,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         self.calls.append((page, limit))
         return self.pages.get(page, [])
 
 
 class SequenceActorMoviesClient(JavdbApiClient):
-    def __init__(self, responses: list[list[dict]]) -> None:
+    def __init__(self, responses: list[list[dict[str, Any]]]) -> None:
         super().__init__()
         self.responses = responses
         self.calls = 0
@@ -40,7 +40,7 @@ class SequenceActorMoviesClient(JavdbApiClient):
         sort_type: int = 0,
         page: int = 1,
         limit: int = 24,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         response = self.responses[self.calls]
         self.calls += 1
         return response
@@ -98,7 +98,7 @@ def test_empty_baseline_does_not_swallow_first_later_match(tmp_path: Path) -> No
     assert repository.list_seen_movie_ids(int(cast(int, follow["id"]))) == {"new-1"}
 
 
-def movie(movie_id: str) -> dict:
+def movie(movie_id: str) -> dict[str, Any]:
     return {"id": movie_id, "number": movie_id.upper(), "title": movie_id}
 
 

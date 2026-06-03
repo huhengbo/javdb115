@@ -142,6 +142,13 @@ class ManualOfflineResponse(BaseModel):
     duplicate_task: TaskOut | None = None
 
 
+class MovieBundleOut(BaseModel):
+    detail: dict[str, object]
+    magnets: list[dict[str, object]]
+    reviews: list[dict[str, object]] = Field(default_factory=list)
+    reviews_error: str | None = None
+
+
 class P115LoginDevice(BaseModel):
     value: str
     label: str

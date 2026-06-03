@@ -17,6 +17,7 @@ const PAGE_SIZE = 24;
 type Props = {
   readonly actor: ActorRef;
   readonly follow: Follow | null;
+  readonly isTop?: boolean;
   readonly onClose: () => void;
   readonly onOpenMovie: (movieId: string, parentActor: ActorRef) => void;
   readonly onSaveFollow: (actor: ActorRef, tagIds: string[], tagNames: string[]) => Promise<void>;
@@ -80,7 +81,7 @@ export function ActorDetailSheet(props: Props) {
 
   return (
     <>
-      <div className="fixed inset-0 z-[60] overflow-y-auto bg-white">
+      <div className={`fixed inset-0 ${props.isTop === false ? 'pointer-events-none z-[60]' : 'pointer-events-auto z-[70]'} overflow-y-auto bg-white`}>
         <div className="mx-auto min-h-full max-w-3xl bg-white">
           <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white/95 px-4 py-3 backdrop-blur">
             <button className="flex items-center gap-1 text-sm text-slate-600" onClick={props.onClose} type="button">

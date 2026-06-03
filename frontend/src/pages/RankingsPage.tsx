@@ -5,6 +5,7 @@ import { ActorDetailSheet } from '../components/discovery/ActorDetailSheet';
 import { MovieDetailSheet } from '../components/discovery/MovieDetailSheet';
 import { MoviePoster } from '../components/MoviePoster';
 import { actorLabel, imgUrl, type ActorRef } from '../lib/javdb';
+import { useDetailHistory } from '../lib/useDetailHistory';
 import type { Follow, Movie, PreviewImage, RankingActor } from '../types';
 
 const MOVIE_PERIODS = [
@@ -15,27 +16,17 @@ const MOVIE_PERIODS = [
 
 type RankingMode = 'movies' | 'actors';
 
-type SelectedMovie = {
-  readonly id: string;
-  readonly parentActor: ActorRef | null;
-};
-
-type SelectedActor = {
-  readonly actor: ActorRef;
-  readonly parentMovie: SelectedMovie | null;
-};
-
 export function RankingsPage() {
   const [mode, setMode] = useState<RankingMode>('movies');
   const [moviePeriod, setMoviePeriod] = useState('daily');
   const [movies, setMovies] = useState<Movie[]>([]);
   const [actors, setActors] = useState<RankingActor[]>([]);
   const [follows, setFollows] = useState<Follow[]>([]);
-  const [selectedMovie, setSelectedMovie] = useState<SelectedMovie | null>(null);
-  const [selectedActor, setSelectedActor] = useState<SelectedActor | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const followByActorId = useMemo(() => Object.fromEntries(follows.map((follow) => [follow.actor_external_id, follow])), [follows]);
+  const { selectedMovie, selectedActor, activeOverlayKind, openMovie, closeMovie, openActor, closeActor } =
+    useDetailHistory('rankings');
   const loadRankings = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -63,10 +54,18 @@ export function RankingsPage() {
       <RankingsFilters mode={mode} moviePeriod={moviePeriod} onMoviePeriodChange={setMoviePeriod} />
       {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger">{error}</p> : null}
       {loading ? <LoadingState /> : null}
-      {!loading && mode === 'movies' ? <MovieRankingList movies={movies} onOpen={(id) => openMovie(id, setSelectedActor, setSelectedMovie)} /> : null}
-      {!loading && mode === 'actors' ? <ActorRankingList actors={actors} onOpen={(actor) => openActor(actor, setSelectedMovie, setSelectedActor)} /> : null}
-      {selectedMovie ? <MovieDetailSheet movieId={selectedMovie.id} onClose={() => closeMovie(selectedMovie, setSelectedMovie, setSelectedActor)} onOpenActor={(actor, parentMovieId) => openActor(actor, setSelectedMovie, setSelectedActor, selectedMovie, parentMovieId)} /> : null}
-      {selectedActor ? <ActorDetailSheet actor={selectedActor.actor} follow={followByActorId[selectedActor.actor.id] ?? null} onClose={() => closeActor(selectedActor, setSelectedMovie, setSelectedActor)} onOpenMovie={(id, actor) => openMovie(id, setSelectedActor, setSelectedMovie, actor)} onSaveFollow={(actor, tagIds, tagNames) => saveFollow(actor, tagIds, tagNames, setFollows)} /> : null}
+      {!loading && mode === 'movies' ? <MovieRankingList movies={movies} onOpen={openMovie} /> : null}
+      {!loading && mode === 'actors' ? <ActorRankingList actors={actors} onOpen={openActor} /> : null}
+      {selectedMovie ? (
+        <MovieDetailSheet
+          isTop={activeOverlayKind === 'movie'}
+          movieId={selectedMovie.id}
+          onClose={closeMovie}
+          onOpenActor={openActor}
+          onOpenMovie={(movieId) => openMovie(movieId, selectedMovie.parentActor)}
+        />
+      ) : null}
+      {selectedActor ? <ActorDetailSheet actor={selectedActor.actor} follow={followByActorId[selectedActor.actor.id] ?? null} isTop={activeOverlayKind === 'actor'} onClose={closeActor} onOpenMovie={openMovie} onSaveFollow={(actor, tagIds, tagNames) => saveFollow(actor, tagIds, tagNames, setFollows)} /> : null}
     </section>
   );
 }
@@ -250,31 +249,4 @@ async function saveFollow(actor: ActorRef, tagIds: string[], tagNames: string[],
     selected_tag_names: tagNames
   });
   await loadFollows(setFollows);
-}
-
-function openMovie(id: string, setSelectedActor: (actor: SelectedActor | null) => void, setSelectedMovie: (movie: SelectedMovie | null) => void, parentActor: ActorRef | null = null) {
-  setSelectedActor(null);
-  setSelectedMovie({ id, parentActor });
-}
-
-function closeMovie(selectedMovie: SelectedMovie, setSelectedMovie: (movie: SelectedMovie | null) => void, setSelectedActor: (actor: SelectedActor | null) => void) {
-  setSelectedMovie(null);
-  if (selectedMovie.parentActor) {
-    setSelectedActor({ actor: selectedMovie.parentActor, parentMovie: null });
-  }
-}
-
-function openActor(actor: ActorRef, setSelectedMovie: (movie: SelectedMovie | null) => void, setSelectedActor: (actor: SelectedActor | null) => void, selectedMovie: SelectedMovie | null = null, parentMovieId?: string) {
-  setSelectedMovie(null);
-  setSelectedActor({
-    actor,
-    parentMovie: parentMovieId ? { id: parentMovieId, parentActor: selectedMovie?.parentActor ?? null } : null
-  });
-}
-
-function closeActor(selectedActor: SelectedActor, setSelectedMovie: (movie: SelectedMovie | null) => void, setSelectedActor: (actor: SelectedActor | null) => void) {
-  setSelectedActor(null);
-  if (selectedActor.parentMovie) {
-    setSelectedMovie(selectedActor.parentMovie);
-  }
 }

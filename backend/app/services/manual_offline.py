@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 from app.errors import NotFoundError
 from app.javdb_models import JavdbMagnet, JavdbWork
@@ -13,6 +13,7 @@ from app.repositories.settings import SettingsRepository
 from app.repositories.task_events import TaskEventsRepository
 from app.repositories.tasks import TasksRepository
 from app.services.cloud import CloudServiceFactory
+from app.services.javdb_movie_payload import JavdbMoviePayload, fetch_javdb_movie_payload
 from app.services.notifier import NotificationService
 from app.services.task_state import TaskStateService, TaskTransition
 
@@ -21,8 +22,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ManualJavdbClient(Protocol):
-    def movie_detail(self, movie_id: str) -> dict: ...
-    def movie_magnets(self, movie_id: str) -> list[dict]: ...
+    def movie_detail(self, movie_id: str) -> dict[str, Any]: ...
+    def movie_magnets(self, movie_id: str) -> list[dict[str, Any]]: ...
     def movie_source_url(self, movie_id: str) -> str: ...
 
 
@@ -39,7 +40,7 @@ class ManualOfflineDependencies:
 @dataclass(frozen=True)
 class ManualOfflineResult:
     task_id: int | None
-    duplicate_task: dict | None = None
+    duplicate_task: dict[str, Any] | None = None
 
 
 class ManualOfflineService:
@@ -58,16 +59,26 @@ class ManualOfflineService:
         *,
         force: bool = False,
     ) -> ManualOfflineResult:
-        detail = self.javdb.movie_detail(movie_id)
-        magnet_data = self._find_magnet(movie_id, magnet_hash)
-        work = self._to_work(movie_id, detail)
+        payload = fetch_javdb_movie_payload(self.javdb, movie_id)
+        return self.submit_prefetched(movie_id, magnet_hash, payload, force=force)
+
+    def submit_prefetched(
+        self,
+        movie_id: str,
+        magnet_hash: str,
+        payload: JavdbMoviePayload,
+        *,
+        force: bool = False,
+    ) -> ManualOfflineResult:
+        magnet_data = self._find_magnet(payload.magnets, movie_id, magnet_hash)
+        work = self._to_work(movie_id, payload.detail)
         duplicate = self.tasks.find_blocking_duplicate_by_code(work.code)
         if duplicate and not force:
             return ManualOfflineResult(None, duplicate)
         magnet = self._to_magnet(magnet_data)
         work_id = self.catalog.upsert_work(work, "submitted")
         magnet_id = self.catalog.add_magnet(work_id, magnet, "manual", "manual_submit", 0)
-        actor_id = self._actor_id(detail)
+        actor_id = self._actor_id(payload.detail)
         task_id = self.tasks.create(work_id, actor_id, magnet_id)
         self._commit()
         cloud_task_id = self._submit_to_115(task_id, work, magnet)
@@ -92,10 +103,14 @@ class ManualOfflineService:
 
     def _submit_to_115(self, task_id: int, work: JavdbWork, magnet: JavdbMagnet) -> str:
         try:
-            return CloudServiceFactory(self.settings).create().add_offline_url(
-                magnet.url,
-                self.settings.require("p115_download_dir_id"),
-                savepath=work.code,
+            return (
+                CloudServiceFactory(self.settings)
+                .create()
+                .add_offline_url(
+                    magnet.url,
+                    self.settings.require("p115_download_dir_id"),
+                    savepath=work.code,
+                )
             )
         except Exception as exc:
             self._state().transition(
@@ -105,13 +120,18 @@ class ManualOfflineService:
             self._commit()
             raise
 
-    def _find_magnet(self, movie_id: str, magnet_hash: str) -> dict:
-        for magnet in self.javdb.movie_magnets(movie_id):
+    def _find_magnet(
+        self,
+        magnets: list[dict[str, Any]],
+        movie_id: str,
+        magnet_hash: str,
+    ) -> dict[str, Any]:
+        for magnet in magnets:
             if str(magnet.get("hash")) == magnet_hash:
                 return magnet
         raise NotFoundError(f"Magnet not found for movie: {movie_id}")
 
-    def _to_work(self, movie_id: str, detail: dict) -> JavdbWork:
+    def _to_work(self, movie_id: str, detail: dict[str, Any]) -> JavdbWork:
         actors = [str(actor.get("name")) for actor in detail.get("actors", []) if actor.get("name")]
         return JavdbWork(
             code=str(detail.get("number") or movie_id),
@@ -123,7 +143,7 @@ class ManualOfflineService:
             magnets=[],
         )
 
-    def _to_magnet(self, magnet_data: dict) -> JavdbMagnet:
+    def _to_magnet(self, magnet_data: dict[str, Any]) -> JavdbMagnet:
         name = str(magnet_data.get("name") or magnet_data.get("hash") or "magnet")
         magnet_hash = str(magnet_data.get("hash") or "")
         return JavdbMagnet(
@@ -137,7 +157,7 @@ class ManualOfflineService:
             return None
         return int(float(str(raw_size)) * BYTES_PER_MB)
 
-    def _actor_id(self, detail: dict) -> int | None:
+    def _actor_id(self, detail: dict[str, Any]) -> int | None:
         actors = detail.get("actors", [])
         if not actors:
             return None

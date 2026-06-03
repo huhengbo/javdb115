@@ -26,6 +26,8 @@ class CloudOfflineTask:
     source_dir_id: str | None
     progress_percent: int | None
     message: str | None
+    source_dir_name: str | None = None
+    download_root_id: str | None = None
 
 
 @dataclass(frozen=True)

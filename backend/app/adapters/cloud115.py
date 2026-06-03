@@ -20,6 +20,7 @@ from app.adapters.cloud115_utils import (
 from app.errors import IntegrationError
 
 OFFLINE_PAGE_SIZE = 100
+FS_PAGE_SIZE = 1150
 OFFLINE_STATUS_QUERIES = (
     (12, "downloading"),
     (9, "failed"),
@@ -93,14 +94,14 @@ class P115CloudClient(Cloud115Client):
         )
 
     def list_items(self, parent_id: str) -> list[CloudItem]:
-        result = self._call("fs_files", {"cid": parent_id})
-        return [self._to_item(item) for item in self._extract_items(result)]
+        return [self._to_item(item) for item in self._iter_fs_items(parent_id)]
 
     def list_directories(self, parent_id: str) -> list[CloudDirectory]:
-        payload = {"cid": parent_id}
-        result = self._call("fs_files", payload)
-        items = self._extract_items(result)
-        return [self._to_directory(item) for item in items if self._is_directory(item)]
+        return [
+            self._to_directory(item)
+            for item in self._iter_fs_items(parent_id)
+            if self._is_directory(item)
+        ]
 
     def add_offline_url(
         self,
@@ -165,6 +166,27 @@ class P115CloudClient(Cloud115Client):
             if page >= page_count:
                 return
             page += 1
+
+    def _iter_fs_items(self, parent_id: str) -> Iterator[dict[str, Any]]:
+        offset = 0
+        while True:
+            payload = {"cid": parent_id, "limit": FS_PAGE_SIZE, "offset": offset}
+            result = self._call("fs_files", payload)
+            items = self._extract_items(result)
+            yield from items
+            if not self._has_more_fs_items(result, offset, len(items)):
+                return
+            offset += len(items)
+
+    def _has_more_fs_items(self, result: Any, offset: int, item_count: int) -> bool:
+        if item_count == 0:
+            return False
+        if not isinstance(result, dict):
+            return False
+        total = to_int(result.get("count") or result.get("total"))
+        if total is None:
+            return item_count >= FS_PAGE_SIZE
+        return offset + item_count < total
 
     def _new_client(self, cookie: str) -> Any:
         try:
@@ -260,11 +282,20 @@ class P115CloudClient(Cloud115Client):
             source_dir_id=self._offline_source_dir_id(item),
             progress_percent=to_int(item.get("percentDone") or item.get("percent")),
             message=self._offline_message(item, status),
+            source_dir_name=self._offline_source_dir_name(item),
+            download_root_id=to_optional_str(item.get("wp_path_id")),
         )
 
     def _offline_source_dir_id(self, item: dict[str, Any]) -> str | None:
         value = item.get("file_id") or item.get("delete_file_id") or item.get("fid")
         return to_optional_str(value)
+
+    def _offline_source_dir_name(self, item: dict[str, Any]) -> str | None:
+        raw_path = to_optional_str(item.get("del_path"))
+        if raw_path is None:
+            return None
+        parts = [part for part in raw_path.replace("\\", "/").split("/") if part]
+        return parts[-1] if parts else None
 
     def _offline_message(self, item: dict[str, Any], status: str) -> str | None:
         message = item.get("err_msg") or item.get("status_text") or item.get("error")

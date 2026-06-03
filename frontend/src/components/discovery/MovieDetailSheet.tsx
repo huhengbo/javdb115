@@ -14,13 +14,14 @@ import { PreviewGrid } from './PreviewGrid';
 import { SimilarMovies } from './SimilarMovies';
 
 type Props = {
+  readonly isTop?: boolean;
   readonly movieId: string;
   readonly onClose: () => void;
   readonly onOpenActor: (actor: ActorRef, parentMovieId: string) => void;
+  readonly onOpenMovie: (movieId: string) => void;
 };
 
-export function MovieDetailSheet({ movieId, onClose, onOpenActor }: Props) {
-  const [currentMovieId, setCurrentMovieId] = useState(movieId);
+export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, onOpenMovie }: Props) {
   const [detail, setDetail] = useState<MovieDetail | null>(null);
   const [magnets, setMagnets] = useState<MagnetItem[]>([]);
   const [reviews, setReviews] = useState<MovieReview[]>([]);
@@ -37,10 +38,6 @@ export function MovieDetailSheet({ movieId, onClose, onOpenActor }: Props) {
   const [submittingHash, setSubmittingHash] = useState<string | null>(null);
 
   useEffect(() => {
-    setCurrentMovieId(movieId);
-  }, [movieId]);
-
-  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -50,7 +47,7 @@ export function MovieDetailSheet({ movieId, onClose, onOpenActor }: Props) {
     setTaskHistory([]);
     setReviewsError(null);
     setTaskHistoryError(null);
-    loadMovieDetail(currentMovieId)
+    loadMovieDetail(movieId)
       .then(({ movieDetail, movieMagnets, movieReviews, movieReviewsError }) => {
         if (cancelled) {
           return;
@@ -75,7 +72,7 @@ export function MovieDetailSheet({ movieId, onClose, onOpenActor }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [currentMovieId]);
+  }, [movieId]);
 
   async function submitMagnet(force = false) {
     const magnet = force ? duplicateWarning?.magnet : confirmMagnet;
@@ -84,7 +81,7 @@ export function MovieDetailSheet({ movieId, onClose, onOpenActor }: Props) {
     }
     setSubmittingHash(magnet.hash);
     try {
-      const result = await client.submitMovieOffline(currentMovieId, magnet.hash, force);
+      const result = await client.submitMovieOffline(movieId, magnet.hash, force);
       if (result.duplicate_task && !force) {
         setConfirmMagnet(null);
         setDuplicateWarning({ magnet, task: result.duplicate_task });
@@ -117,14 +114,14 @@ export function MovieDetailSheet({ movieId, onClose, onOpenActor }: Props) {
 
   return (
     <>
-      <div className="fixed inset-0 z-[60] overflow-y-auto bg-white">
+      <div className={`fixed inset-0 ${isTop ? 'pointer-events-auto z-[70]' : 'pointer-events-none z-[60]'} overflow-y-auto bg-white`}>
         <div className="mx-auto min-h-full max-w-3xl bg-white">
           <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white/95 px-4 py-3 backdrop-blur">
             <button className="flex items-center gap-1 text-sm text-slate-600" onClick={onClose} type="button">
               <ArrowLeft size={18} />
               返回
             </button>
-            <span className="text-sm font-medium text-ink">作品详情 · {detail?.number ?? currentMovieId}</span>
+            <span className="text-sm font-medium text-ink">作品详情 · {detail?.number ?? movieId}</span>
             <span className="w-12" />
           </header>
           {loading ? <LoadingState /> : null}
@@ -134,8 +131,8 @@ export function MovieDetailSheet({ movieId, onClose, onOpenActor }: Props) {
               detail={detail}
               magnets={magnets}
               message={message}
-              onOpenActor={(actor) => onOpenActor(actor, currentMovieId)}
-              onOpenMovie={setCurrentMovieId}
+              onOpenActor={(actor) => onOpenActor(actor, movieId)}
+              onOpenMovie={onOpenMovie}
               onPreview={setPreviewIndex}
               onSelectMagnet={setConfirmMagnet}
               reviews={reviews}
@@ -217,25 +214,13 @@ function ErrorState({ error, onClose }: { readonly error: string; readonly onClo
 }
 
 async function loadMovieDetail(movieId: string) {
-  const [movieDetail, movieMagnets] = await Promise.all([
-    client.movieDetail(movieId),
-    client.movieMagnets(movieId)
-  ]);
-  try {
-    return {
-      movieDetail,
-      movieMagnets,
-      movieReviews: await client.movieReviews(movieId),
-      movieReviewsError: null
-    };
-  } catch (err) {
-    return {
-      movieDetail,
-      movieMagnets,
-      movieReviews: [],
-      movieReviewsError: (err as Error).message
-    };
-  }
+  const bundle = await client.movieBundle(movieId);
+  return {
+    movieDetail: bundle.detail,
+    movieMagnets: bundle.magnets,
+    movieReviews: bundle.reviews,
+    movieReviewsError: bundle.reviews_error
+  };
 }
 
 type ContentProps = {

@@ -8,17 +8,8 @@ import { MovieDetailSheet } from '../components/discovery/MovieDetailSheet';
 import { MoviePoster } from '../components/MoviePoster';
 import { actorLabel, imgUrl, type ActorRef } from '../lib/javdb';
 import { formatDateTime } from '../lib/tasks';
+import { useDetailHistory } from '../lib/useDetailHistory';
 import type { Follow, FollowCheckResult } from '../types';
-
-type SelectedMovie = {
-  readonly id: string;
-  readonly parentActor: ActorRef | null;
-};
-
-type SelectedActor = {
-  readonly actor: ActorRef;
-  readonly parentMovie: SelectedMovie | null;
-};
 
 export function FollowingPage() {
   const [follows, setFollows] = useState<Follow[]>([]);
@@ -29,20 +20,17 @@ export function FollowingPage() {
   const [selectedCheck, setSelectedCheck] = useState<FollowCheckResult | null>(null);
   const [editingFollow, setEditingFollow] = useState<Follow | null>(null);
   const [deletingFollow, setDeletingFollow] = useState<Follow | null>(null);
-  const [selectedMovie, setSelectedMovie] = useState<SelectedMovie | null>(null);
-  const [selectedActor, setSelectedActor] = useState<SelectedActor | null>(null);
-
   const actorFollows = useMemo(() => follows.filter((follow) => follow.type !== 'movie'), [follows]);
   const movieFollows = useMemo(() => follows.filter((follow) => follow.type === 'movie'), [follows]);
   const followByActorId = useMemo(
     () => Object.fromEntries(actorFollows.map((follow) => [follow.actor_external_id, follow])),
     [actorFollows]
   );
-
+  const { selectedMovie, selectedActor, activeOverlayKind, openMovie, closeMovie, openActor, closeActor } =
+    useDetailHistory('following');
   useEffect(() => {
     void loadFollows();
   }, []);
-
   async function loadFollows() {
     setLoading(true);
     try {
@@ -53,7 +41,6 @@ export function FollowingPage() {
       setLoading(false);
     }
   }
-
   async function handleCheck(followId: number) {
     setChecking(true);
     setError(null);
@@ -68,7 +55,6 @@ export function FollowingPage() {
       setChecking(false);
     }
   }
-
   async function handleCheckAll() {
     setChecking(true);
     setError(null);
@@ -84,12 +70,10 @@ export function FollowingPage() {
       setChecking(false);
     }
   }
-
   async function handleToggle(follow: Follow) {
     await client.updateFollow(follow.id, { enabled: !follow.enabled });
     await loadFollows();
   }
-
   async function handleDelete(followId: number) {
     await client.deleteFollow(followId);
     if (selectedCheck?.follow_id === followId) {
@@ -98,7 +82,6 @@ export function FollowingPage() {
     setDeletingFollow(null);
     await loadFollows();
   }
-
   async function saveFollow(actor: ActorRef, tagIds: string[], tagNames: string[]) {
     await client.createFollow({
       actor_external_id: actor.id,
@@ -117,35 +100,6 @@ export function FollowingPage() {
       selected_tag_names: tagNames
     });
     await loadFollows();
-  }
-
-  function openActor(actor: ActorRef, parentMovieId?: string) {
-    setSelectedMovie(null);
-    setSelectedActor({
-      actor,
-      parentMovie: parentMovieId ? { id: parentMovieId, parentActor: selectedMovie?.parentActor ?? null } : null
-    });
-  }
-
-  function closeActor() {
-    const parentMovie = selectedActor?.parentMovie ?? null;
-    setSelectedActor(null);
-    if (parentMovie) {
-      setSelectedMovie(parentMovie);
-    }
-  }
-
-  function openMovie(movieId: string, parentActor: ActorRef | null = null) {
-    setSelectedActor(null);
-    setSelectedMovie({ id: movieId, parentActor });
-  }
-
-  function closeMovie() {
-    const parentActor = selectedMovie?.parentActor ?? null;
-    setSelectedMovie(null);
-    if (parentActor) {
-      setSelectedActor({ actor: parentActor, parentMovie: null });
-    }
   }
 
   if (loading) {
@@ -312,12 +266,19 @@ export function FollowingPage() {
         />
       ) : null}
       {selectedMovie ? (
-        <MovieDetailSheet movieId={selectedMovie.id} onClose={closeMovie} onOpenActor={openActor} />
+        <MovieDetailSheet
+          isTop={activeOverlayKind === 'movie'}
+          movieId={selectedMovie.id}
+          onClose={closeMovie}
+          onOpenActor={openActor}
+          onOpenMovie={(movieId) => openMovie(movieId, selectedMovie.parentActor)}
+        />
       ) : null}
       {selectedActor ? (
         <ActorDetailSheet
           actor={selectedActor.actor}
           follow={followByActorId[selectedActor.actor.id] ?? null}
+          isTop={activeOverlayKind === 'actor'}
           onClose={closeActor}
           onOpenMovie={openMovie}
           onSaveFollow={saveFollow}

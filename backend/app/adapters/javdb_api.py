@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
-from typing import Protocol
+from collections import OrderedDict
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, Protocol, cast
 from urllib.parse import urljoin
 
 import httpx
@@ -34,15 +38,72 @@ ACTOR_SORT_BY_MAP = {
 }
 ACTOR_FILTER_PRIORITY = ("s", "m", "c", "p", "1", "0")
 TYPE_TAG_IDS = {"0", "1"}
+JAVDB_CACHE_MAX_ENTRIES = 512
+JAVDB_SHORT_CACHE_TTL_SECONDS = 300
+JAVDB_MEDIUM_CACHE_TTL_SECONDS = 1800
+JAVDB_LONG_CACHE_TTL_SECONDS = 3600
+MOVIE_DETAIL_PATH_PREFIX = "/api/v4/movies/"
+MOVIE_API_PATH_PREFIX = "/api/v1/movies/"
+MAGNETS_PATH_SUFFIX = "/magnets"
+REVIEWS_PATH_SUFFIX = "/reviews"
+ACTOR_DETAIL_PATH_PREFIX = "/api/v1/actors/"
 
 
 def make_signature(ts: int | None = None) -> str:
     ts = ts or int(time.time())
-    return f"{ts}.{DEVICE_ID}.{hashlib.md5(f"{ts}{PART1}".encode()).hexdigest()}"
+    return f"{ts}.{DEVICE_ID}.{hashlib.md5(f'{ts}{PART1}'.encode()).hexdigest()}"
 
 
 class JavdbApiTransport(Protocol):
     def javdb_api_get(self, path: str, query: str, sig: str) -> str: ...
+
+
+@dataclass(frozen=True)
+class JavdbCacheEntry:
+    value: str
+    expires_at: float
+
+
+class JavdbApiResponseCache:
+    def __init__(
+        self,
+        *,
+        max_entries: int = JAVDB_CACHE_MAX_ENTRIES,
+        time_provider: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._items: OrderedDict[tuple[str, str], JavdbCacheEntry] = OrderedDict()
+        self._max_entries = max_entries
+        self._time_provider = time_provider
+        self._lock = threading.Lock()
+
+    def get(self, key: tuple[str, str]) -> str | None:
+        now = self._time_provider()
+        with self._lock:
+            entry = self._items.get(key)
+            if entry is None:
+                return None
+            if entry.expires_at <= now:
+                del self._items[key]
+                return None
+            self._items.move_to_end(key)
+            return entry.value
+
+    def set(self, key: tuple[str, str], value: str, ttl_seconds: int) -> None:
+        now = self._time_provider()
+        with self._lock:
+            self._items[key] = JavdbCacheEntry(value, now + ttl_seconds)
+            self._items.move_to_end(key)
+            self._evict(now)
+
+    def _evict(self, now: float) -> None:
+        expired = [key for key, entry in self._items.items() if entry.expires_at <= now]
+        for key in expired:
+            del self._items[key]
+        while len(self._items) > self._max_entries:
+            self._items.popitem(last=False)
+
+
+JAVDB_API_RESPONSE_CACHE = JavdbApiResponseCache()
 
 
 class HttpJavdbApiTransport:
@@ -70,91 +131,160 @@ class JavdbApiClient:
         self,
         transport: JavdbApiTransport | None = None,
         site_base_url: str = "https://javdb.com",
+        cache: JavdbApiResponseCache | None = None,
     ) -> None:
         self._transport = transport or HttpJavdbApiTransport()
         self._site_base_url = site_base_url.rstrip("/")
+        self._cache = cache if cache is not None else self._default_cache(transport)
 
-    def _get(self, path: str, extra_params: str = "") -> dict:
-        sig = make_signature()
+    def _get(self, path: str, extra_params: str = "") -> dict[str, Any]:
         query = f"{COMMON_PARAMS}&{extra_params}" if extra_params else COMMON_PARAMS
         try:
-            raw = self._transport.javdb_api_get(path, query, sig)
-            return json.loads(raw)
+            raw = self._cached_api_get(path, query)
+            payload = json.loads(raw)
+            if not isinstance(payload, dict):
+                raise IntegrationError(f"JavDB API returned invalid JSON object: {path}")
+            return cast(dict[str, Any], payload)
         except json.JSONDecodeError as exc:
             raise IntegrationError(f"JavDB API returned invalid JSON: {path}") from exc
+        except IntegrationError:
+            raise
         except Exception as exc:
             raise IntegrationError(f"JavDB API request failed: {path}") from exc
 
-    def about(self) -> list[dict]:
-        return self._get("/api/v1/about").get("data", [])
+    def _default_cache(
+        self,
+        transport: JavdbApiTransport | None,
+    ) -> JavdbApiResponseCache | None:
+        return JAVDB_API_RESPONSE_CACHE if transport is None else None
 
-    def startup(self) -> dict:
-        return self._get("/api/v1/startup").get("data", {})
+    def _cached_api_get(self, path: str, query: str) -> str:
+        key = (path, query)
+        cached = self._cache.get(key) if self._cache else None
+        if cached is not None:
+            return cached
+        raw = self._transport.javdb_api_get(path, query, make_signature())
+        if self._cache:
+            self._cache.set(key, raw, self._cache_ttl_seconds(path))
+        return raw
 
-    def movies_recommend(self, period: str = "daily") -> list[dict]:
-        return self._get("/api/v1/movies/recommend", f"period={period}").get(
-            "data", {}
-        ).get("movies", [])
+    def _cache_ttl_seconds(self, path: str) -> int:
+        if path.startswith(MOVIE_DETAIL_PATH_PREFIX) or path.endswith(MAGNETS_PATH_SUFFIX):
+            return JAVDB_MEDIUM_CACHE_TTL_SECONDS
+        if path.startswith(ACTOR_DETAIL_PATH_PREFIX):
+            return JAVDB_LONG_CACHE_TTL_SECONDS
+        return JAVDB_SHORT_CACHE_TTL_SECONDS
+
+    def _dict_value(self, data: dict[str, Any], key: str) -> dict[str, Any]:
+        value = data.get(key)
+        return cast(dict[str, Any], value) if isinstance(value, dict) else {}
+
+    def _list_value(self, data: dict[str, Any], key: str) -> list[dict[str, Any]]:
+        value = data.get(key)
+        if not isinstance(value, list):
+            return []
+        return [cast(dict[str, Any], item) for item in value if isinstance(item, dict)]
+
+    def about(self) -> list[dict[str, Any]]:
+        return self._list_value(self._get("/api/v1/about"), "data")
+
+    def startup(self) -> dict[str, Any]:
+        return self._dict_value(self._get("/api/v1/startup"), "data")
+
+    def movies_recommend(self, period: str = "daily") -> list[dict[str, Any]]:
+        data = self._dict_value(
+            self._get("/api/v1/movies/recommend", f"period={period}"),
+            "data",
+        )
+        return self._list_value(data, "movies")
 
     def movies_latest(
-        self, filter_by: str = "can_play", sort_by: str = "update",
-        page: int = 1, limit: int = 24,
-    ) -> list[dict]:
-        return self._get(
-            "/api/v1/movies/latest",
-            f"type=all&filter_by={filter_by}&sort_by={sort_by}&page={page}&limit={limit}",
-        ).get("data", {}).get("movies", [])
+        self,
+        filter_by: str = "can_play",
+        sort_by: str = "update",
+        page: int = 1,
+        limit: int = 24,
+    ) -> list[dict[str, Any]]:
+        data = self._dict_value(
+            self._get(
+                "/api/v1/movies/latest",
+                f"type=all&filter_by={filter_by}&sort_by={sort_by}&page={page}&limit={limit}",
+            ),
+            "data",
+        )
+        return self._list_value(data, "movies")
 
     def movies_by_tag(
-        self, filter_by: str, sort_by: str = "update",
-        page: int = 1, limit: int = 24,
-    ) -> list[dict]:
-        return self._get(
-            "/api/v1/movies/tags",
-            f"filter_by={filter_by}&sort_by={sort_by}&page={page}&limit={limit}",
-        ).get("data", {}).get("movies", [])
+        self,
+        filter_by: str,
+        sort_by: str = "update",
+        page: int = 1,
+        limit: int = 24,
+    ) -> list[dict[str, Any]]:
+        data = self._dict_value(
+            self._get(
+                "/api/v1/movies/tags",
+                f"filter_by={filter_by}&sort_by={sort_by}&page={page}&limit={limit}",
+            ),
+            "data",
+        )
+        return self._list_value(data, "movies")
 
-    def movie_detail(self, movie_id: str) -> dict:
-        return self._get(f"/api/v4/movies/{movie_id}").get("data", {}).get("movie", {})
+    def movie_detail(self, movie_id: str) -> dict[str, Any]:
+        data = self._dict_value(self._get(f"/api/v4/movies/{movie_id}"), "data")
+        return self._dict_value(data, "movie")
 
-    def movie_magnets(self, movie_id: str) -> list[dict]:
-        return self._get(f"/api/v1/movies/{movie_id}/magnets").get(
-            "data", {}
-        ).get("magnets", [])
+    def movie_magnets(self, movie_id: str) -> list[dict[str, Any]]:
+        data = self._dict_value(self._get(f"/api/v1/movies/{movie_id}/magnets"), "data")
+        return self._list_value(data, "magnets")
 
-    def movie_reviews(
-        self, movie_id: str, page: int = 1, limit: int = 5
-    ) -> list[dict]:
-        return self._get(
-            f"/api/v1/movies/{movie_id}/reviews",
-            f"page={page}&sort_by=hotly&limit={limit}",
-        ).get("data", {}).get("reviews", [])
+    def movie_reviews(self, movie_id: str, page: int = 1, limit: int = 5) -> list[dict[str, Any]]:
+        data = self._dict_value(
+            self._get(
+                f"/api/v1/movies/{movie_id}/reviews",
+                f"page={page}&sort_by=hotly&limit={limit}",
+            ),
+            "data",
+        )
+        return self._list_value(data, "reviews")
 
-    def rankings(self, rtype: str = "0", period: str = "today") -> list[dict]:
-        return self._get(
-            "/api/v1/rankings", f"type={rtype}&period={period}"
-        ).get("data", {}).get("movies", [])
+    def rankings(self, rtype: str = "0", period: str = "today") -> list[dict[str, Any]]:
+        data = self._dict_value(
+            self._get("/api/v1/rankings", f"type={rtype}&period={period}"),
+            "data",
+        )
+        return self._list_value(data, "movies")
 
     def rankings_playback(
         self, period: str = "daily", filter_by: str = "high_score"
-    ) -> list[dict]:
-        return self._get(
-            "/api/v1/rankings/playback", f"period={period}&filter_by={filter_by}"
-        ).get("data", {}).get("movies", [])
+    ) -> list[dict[str, Any]]:
+        data = self._dict_value(
+            self._get(
+                "/api/v1/rankings/playback",
+                f"period={period}&filter_by={filter_by}",
+            ),
+            "data",
+        )
+        return self._list_value(data, "movies")
 
-    def rankings_actors(self, rtype: str = "monthly") -> list[dict]:
-        return self._get(
-            "/api/v1/rankings/actors", f"type={rtype}"
-        ).get("data", {}).get("actors", [])
+    def rankings_actors(self, rtype: str = "monthly") -> list[dict[str, Any]]:
+        data = self._dict_value(
+            self._get("/api/v1/rankings/actors", f"type={rtype}"),
+            "data",
+        )
+        return self._list_value(data, "actors")
 
-    def search(self, query: str) -> list[dict]:
-        return self._get("/api/v2/search", f"q={query}").get("data", {}).get("movies", [])
+    def search(self, query: str) -> list[dict[str, Any]]:
+        data = self._dict_value(self._get("/api/v2/search", f"q={query}"), "data")
+        return self._list_value(data, "movies")
 
-    def actor_detail(self, actor_id: str) -> dict:
-        return self._get(f"/api/v1/actors/{actor_id}").get("data", {}).get("actor", {})
+    def actor_detail(self, actor_id: str) -> dict[str, Any]:
+        data = self._dict_value(self._get(f"/api/v1/actors/{actor_id}"), "data")
+        return self._dict_value(data, "actor")
 
-    def actor_filter_tags(self, actor_id: str) -> list[dict]:
-        return self._get(f"/api/v1/actors/{actor_id}").get("data", {}).get("filter_tags", [])
+    def actor_filter_tags(self, actor_id: str) -> list[dict[str, Any]]:
+        data = self._dict_value(self._get(f"/api/v1/actors/{actor_id}"), "data")
+        return self._list_value(data, "filter_tags")
 
     def actor_movies(
         self,
@@ -163,7 +293,7 @@ class JavdbApiClient:
         sort_type: int = 0,
         page: int = 1,
         limit: int = 24,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         normalized_tag_ids = [tag_id for tag_id in tag_ids or [] if tag_id]
         actor_type_tag = self._default_actor_tag(actor_id)
         primary_tag_id = self._primary_actor_tag(normalized_tag_ids, actor_type_tag)
@@ -173,9 +303,7 @@ class JavdbApiClient:
             page=page,
             limit=limit,
         )
-        remaining_tag_ids = [
-            tag_id for tag_id in normalized_tag_ids if tag_id != primary_tag_id
-        ]
+        remaining_tag_ids = [tag_id for tag_id in normalized_tag_ids if tag_id != primary_tag_id]
         if not remaining_tag_ids:
             return movies
         filtered_movies = [
@@ -193,11 +321,11 @@ class JavdbApiClient:
 
     def _movie_matches_tags(
         self,
-        movie: dict,
+        movie: dict[str, Any],
         tag_ids: list[str],
         actor_type_tag: str,
     ) -> bool:
-        detail: dict | None = None
+        detail: dict[str, Any] | None = None
         for tag_id in tag_ids:
             list_match = self._matches_list_tag(movie, tag_id, actor_type_tag)
             if list_match is False:
@@ -211,7 +339,7 @@ class JavdbApiClient:
 
     def _matches_list_tag(
         self,
-        movie: dict,
+        movie: dict[str, Any],
         tag_id: str,
         actor_type_tag: str,
     ) -> bool | None:
@@ -229,13 +357,13 @@ class JavdbApiClient:
             return "28" in tag_values if tag_id == "s" else tag_id in tag_values
         return None
 
-    def _matches_detail_tag(self, detail: dict, tag_id: str) -> bool:
+    def _matches_detail_tag(self, detail: dict[str, Any], tag_id: str) -> bool:
         if tag_id == "s":
             tag_values = {str(tag.get("id")) for tag in detail.get("tags", [])}
             return "28" in tag_values
         return self._matches_tag(detail, tag_id)
 
-    def _matches_tag(self, detail: dict, tag_id: str) -> bool:
+    def _matches_tag(self, detail: dict[str, Any], tag_id: str) -> bool:
         if tag_id in {"0", "1"}:
             return str(detail.get("type")) == tag_id
         if tag_id == "p":

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Any
 
 from app.adapters.javdb_api import JavdbApiClient
 
@@ -32,8 +33,8 @@ def collect_actor_movies(
     tag_ids: list[str],
     *,
     scan: ActorMovieScan = DEFAULT_ACTOR_MOVIE_SCAN,
-) -> list[dict]:
-    movies: list[dict] = []
+) -> list[dict[str, Any]]:
+    movies: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     page_movies = client.actor_movies(
         actor_id,

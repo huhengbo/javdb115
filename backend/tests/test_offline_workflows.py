@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Any, cast
+
+import pytest
 
 from app.adapters.javdb_api import JavdbApiClient
 from app.contracts import ActorCreate
@@ -21,7 +24,7 @@ EMPTY_FILTER_RULES = '{"min_size_gb":0,"required_keywords":[],"excluded_keywords
 
 
 class FollowWorkflowClient(JavdbApiClient):
-    def actor_detail(self, actor_id: str) -> dict:
+    def actor_detail(self, actor_id: str) -> dict[str, Any]:
         return {"id": actor_id, "type": 0}
 
     def actor_movies(
@@ -31,10 +34,10 @@ class FollowWorkflowClient(JavdbApiClient):
         sort_type: int = 0,
         page: int = 1,
         limit: int = 24,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         return [movie_summary()]
 
-    def movie_detail(self, movie_id: str) -> dict:
+    def movie_detail(self, movie_id: str) -> dict[str, Any]:
         assert movie_id == "movie-1"
         return {
             **movie_summary(),
@@ -43,13 +46,13 @@ class FollowWorkflowClient(JavdbApiClient):
             "type": 0,
         }
 
-    def movie_magnets(self, movie_id: str) -> list[dict]:
+    def movie_magnets(self, movie_id: str) -> list[dict[str, Any]]:
         assert movie_id == "movie-1"
         return [{"hash": "hash-1", "name": "ONE-001.torrent", "size": 4096}]
 
 
 class SequenceFollowWorkflowClient(FollowWorkflowClient):
-    def __init__(self, responses: list[list[dict]]) -> None:
+    def __init__(self, responses: list[list[dict[str, Any]]]) -> None:
         super().__init__()
         self.responses = responses
         self.calls = 0
@@ -61,14 +64,14 @@ class SequenceFollowWorkflowClient(FollowWorkflowClient):
         sort_type: int = 0,
         page: int = 1,
         limit: int = 24,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         response = self.responses[self.calls]
         self.calls += 1
         return response
 
 
 class ManualClient:
-    def movie_detail(self, movie_id: str) -> dict:
+    def movie_detail(self, movie_id: str) -> dict[str, Any]:
         assert movie_id == "abc123"
         return {
             "number": "ABC-123",
@@ -78,7 +81,7 @@ class ManualClient:
             "actors": [{"id": "actor-1", "name": "Actor One"}],
         }
 
-    def movie_magnets(self, movie_id: str) -> list[dict]:
+    def movie_magnets(self, movie_id: str) -> list[dict[str, Any]]:
         assert movie_id == "abc123"
         return [{"hash": "hash-1", "name": "ABC-123.torrent", "size": 2048}]
 
@@ -100,7 +103,10 @@ class FakeCloud:
         return "cloud-task-1"
 
 
-def test_manual_offline_service_creates_submitted_task(monkeypatch, tmp_path: Path) -> None:
+def test_manual_offline_service_creates_submitted_task(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     connection = setup_manual_database(monkeypatch, tmp_path)
     service = ManualOfflineService(manual_dependencies(connection))
 
@@ -117,7 +123,10 @@ def test_manual_offline_service_creates_submitted_task(monkeypatch, tmp_path: Pa
     assert events[int(cast(int, task["id"]))][0]["to_stage"] == "manual_115_submitted"
 
 
-def test_manual_offline_duplicate_requires_force(monkeypatch, tmp_path: Path) -> None:
+def test_manual_offline_duplicate_requires_force(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     connection = setup_manual_database(monkeypatch, tmp_path)
     service = ManualOfflineService(manual_dependencies(connection))
 
@@ -134,7 +143,7 @@ def test_manual_offline_duplicate_requires_force(monkeypatch, tmp_path: Path) ->
 
 
 def test_manual_offline_keeps_task_when_notification_fails(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     connection = setup_manual_database(monkeypatch, tmp_path)
@@ -157,7 +166,10 @@ def test_manual_offline_keeps_task_when_notification_fails(
     assert "manual_115_submitted" in stages
 
 
-def test_task_retry_resubmits_failed_manual_task(monkeypatch, tmp_path: Path) -> None:
+def test_task_retry_resubmits_failed_manual_task(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     connection = setup_manual_database(monkeypatch, tmp_path)
     result = ManualOfflineService(manual_dependencies(connection)).submit("abc123", "hash-1")
     task_id = int(cast(int, result.task_id))
@@ -174,7 +186,10 @@ def test_task_retry_resubmits_failed_manual_task(monkeypatch, tmp_path: Path) ->
     assert task["stage"] == "manual_115_resubmitted"
 
 
-def test_follow_workflow_creates_submitted_task(monkeypatch, tmp_path: Path) -> None:
+def test_follow_workflow_creates_submitted_task(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     connection = setup_follow_database(monkeypatch, tmp_path)
     follow = actor_follow(connection, ["s", "c"], ["单体作品", "含字幕"])
     FollowsRepository(connection).add_seen_movies(int(cast(int, follow["id"])), ["old-movie"])
@@ -191,7 +206,7 @@ def test_follow_workflow_creates_submitted_task(monkeypatch, tmp_path: Path) -> 
 
 
 def test_follow_workflow_processes_first_match_after_empty_baseline(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     connection = setup_follow_database(monkeypatch, tmp_path)
@@ -209,7 +224,10 @@ def test_follow_workflow_processes_first_match_after_empty_baseline(
     assert task["work"]["code"] == "ONE-001"
 
 
-def test_follow_workflow_retry_uses_follow_rule(monkeypatch, tmp_path: Path) -> None:
+def test_follow_workflow_retry_uses_follow_rule(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     connection = setup_follow_database(monkeypatch, tmp_path)
     follow = actor_follow(connection, ["s"], ["单体作品"])
     FollowsRepository(connection).add_seen_movies(int(cast(int, follow["id"])), ["old-movie"])
@@ -222,7 +240,7 @@ def test_follow_workflow_retry_uses_follow_rule(monkeypatch, tmp_path: Path) -> 
     assert len(TasksRepository(connection).list_all()) >= 1
 
 
-def movie_summary() -> dict:
+def movie_summary() -> dict[str, Any]:
     return {
         "id": "movie-1",
         "number": "ONE-001",
@@ -239,7 +257,10 @@ def movie_summary() -> dict:
     }
 
 
-def setup_manual_database(monkeypatch, tmp_path: Path) -> Any:
+def setup_manual_database(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> sqlite3.Connection:
     connection = setup_database(tmp_path).connect()
     SettingsRepository(connection).upsert("p115_download_dir_id", "dir-1", False)
     ActorsRepository(connection).create(
@@ -256,7 +277,10 @@ def setup_manual_database(monkeypatch, tmp_path: Path) -> Any:
     return connection
 
 
-def setup_follow_database(monkeypatch, tmp_path: Path) -> Any:
+def setup_follow_database(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> sqlite3.Connection:
     connection = setup_database(tmp_path).connect()
     settings = SettingsRepository(connection)
     settings.upsert("p115_download_dir_id", "dir-1", False)
@@ -268,7 +292,11 @@ def setup_follow_database(monkeypatch, tmp_path: Path) -> Any:
     return connection
 
 
-def actor_follow(connection: Any, tag_ids: list[str], tag_names: list[str]) -> dict:
+def actor_follow(
+    connection: sqlite3.Connection,
+    tag_ids: list[str],
+    tag_names: list[str],
+) -> dict[str, Any]:
     return FollowsRepository(connection).save(
         "actor-1",
         "Actor One",
@@ -279,7 +307,7 @@ def actor_follow(connection: Any, tag_ids: list[str], tag_names: list[str]) -> d
     )
 
 
-def manual_dependencies(connection: Any) -> ManualOfflineDependencies:
+def manual_dependencies(connection: sqlite3.Connection) -> ManualOfflineDependencies:
     return ManualOfflineDependencies(
         actors=ActorsRepository(connection),
         catalog=CatalogRepository(connection),
@@ -305,7 +333,7 @@ def follow_dependencies(
     )
 
 
-def task_retry_dependencies(connection: Any) -> TaskRetryDependencies:
+def task_retry_dependencies(connection: sqlite3.Connection) -> TaskRetryDependencies:
     return TaskRetryDependencies(
         catalog=CatalogRepository(connection),
         logs=LogsRepository(connection),

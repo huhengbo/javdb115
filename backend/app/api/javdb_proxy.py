@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 from sqlite3 import Connection
-from typing import cast
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, Query
 
 from app.adapters.javdb_api import JavdbApiClient
-from app.contracts import ManualOfflineRequest, ManualOfflineResponse, TaskOut
+from app.contracts import ManualOfflineRequest, ManualOfflineResponse, MovieBundleOut, TaskOut
 from app.dependencies import get_connection, require_user
 from app.repositories.actors import ActorsRepository
 from app.repositories.catalog import CatalogRepository
 from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.tasks import TasksRepository
+from app.services.javdb_movie_bundle import JavdbMovieBundleService
 from app.services.manual_offline import ManualOfflineDependencies, ManualOfflineService
 
 router = APIRouter(prefix="/api/javdb", tags=["javdb"], dependencies=[Depends(require_user)])
@@ -28,7 +29,7 @@ def movies_latest(
     page: int = Query(default=1),
     limit: int = Query(default=24),
     client: JavdbApiClient = Depends(get_client),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return client.movies_latest(filter_by=filter_by, page=page, limit=limit)
 
 
@@ -38,7 +39,7 @@ def movies_by_tag(
     page: int = Query(default=1),
     limit: int = Query(default=24),
     client: JavdbApiClient = Depends(get_client),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return client.movies_by_tag(filter_by, page=page, limit=limit)
 
 
@@ -46,15 +47,29 @@ def movies_by_tag(
 def movies_recommend(
     period: str = Query(default="daily"),
     client: JavdbApiClient = Depends(get_client),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return client.movies_recommend(period)
+
+
+@router.get("/movies/{movie_id}/bundle", response_model=MovieBundleOut)
+def movie_bundle(
+    movie_id: str,
+    client: JavdbApiClient = Depends(get_client),
+) -> dict[str, object]:
+    bundle = JavdbMovieBundleService(client).load(movie_id)
+    return {
+        "detail": bundle.detail,
+        "magnets": bundle.magnets,
+        "reviews": bundle.reviews,
+        "reviews_error": bundle.reviews_error,
+    }
 
 
 @router.get("/movies/{movie_id}")
 def movie_detail(
     movie_id: str,
     client: JavdbApiClient = Depends(get_client),
-) -> dict:
+) -> dict[str, Any]:
     return client.movie_detail(movie_id)
 
 
@@ -62,7 +77,7 @@ def movie_detail(
 def movie_magnets(
     movie_id: str,
     client: JavdbApiClient = Depends(get_client),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return client.movie_magnets(movie_id)
 
 
@@ -72,7 +87,7 @@ def movie_reviews(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=5, ge=1, le=20),
     client: JavdbApiClient = Depends(get_client),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return client.movie_reviews(movie_id, page=page, limit=limit)
 
 
@@ -81,7 +96,7 @@ def rankings(
     type: str = Query(default="0"),
     period: str = Query(default="today"),
     client: JavdbApiClient = Depends(get_client),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return client.rankings(rtype=type, period=period)
 
 
@@ -90,7 +105,7 @@ def rankings_playback(
     period: str = Query(default="daily"),
     filter_by: str = Query(default="high_score"),
     client: JavdbApiClient = Depends(get_client),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return client.rankings_playback(period=period, filter_by=filter_by)
 
 
@@ -98,7 +113,7 @@ def rankings_playback(
 def rankings_actors(
     type: str = Query(default="monthly"),
     client: JavdbApiClient = Depends(get_client),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return client.rankings_actors(rtype=type)
 
 
@@ -106,7 +121,7 @@ def rankings_actors(
 def actor_detail(
     actor_id: str,
     client: JavdbApiClient = Depends(get_client),
-) -> dict:
+) -> dict[str, Any]:
     return client.actor_detail(actor_id)
 
 
@@ -118,7 +133,7 @@ def actor_movies(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=24, ge=1, le=48),
     client: JavdbApiClient = Depends(get_client),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return client.actor_movies(
         actor_id,
         tag_ids=tag_ids,
@@ -156,5 +171,5 @@ def submit_movie_offline(
 def search(
     q: str = Query(min_length=1),
     client: JavdbApiClient = Depends(get_client),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return client.search(q)

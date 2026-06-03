@@ -7,6 +7,7 @@ import type {
   ManualOfflineResult,
   MagnetItem,
   Movie,
+  MovieBundle,
   MovieDetail,
   MovieReview,
   P115LoginDevice,
@@ -112,6 +113,7 @@ export const client = {
     api<FollowCheckResult[]>('/api/follows/check', { method: 'POST' }),
 
   // JavDB API proxy (public endpoints)
+  movieBundle: (id: string) => api<MovieBundle>(`/api/javdb/movies/${id}/bundle`),
   movieDetail: (id: string) => api<MovieDetail>(`/api/javdb/movies/${id}`),
   movieMagnets: (id: string) => api<MagnetItem[]>(`/api/javdb/movies/${id}/magnets`),
   movieReviews: (id: string, limit = 5) =>

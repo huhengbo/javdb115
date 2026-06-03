@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from app.adapters.telegram import TelegramBotInfo
 from app.database import Database
@@ -67,7 +70,7 @@ def test_telegram_test_requires_saved_settings(tmp_path: Path) -> None:
 
 
 def test_telegram_test_verifies_saved_token_and_configures_commands(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     connection = setup_database(tmp_path).connect()
@@ -94,7 +97,10 @@ def test_telegram_test_verifies_saved_token_and_configures_commands(
     assert calls == ["get_me", "set_commands"]
 
 
-def test_telegram_test_can_use_custom_success_message(monkeypatch, tmp_path: Path) -> None:
+def test_telegram_test_can_use_custom_success_message(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     connection = setup_database(tmp_path).connect()
     repository = SettingsRepository(connection)
     repository.upsert("telegram_bot_token", "bot-token", True)
@@ -114,7 +120,10 @@ def test_telegram_test_can_use_custom_success_message(monkeypatch, tmp_path: Pat
     assert NotificationService(repository).send_test("连接正常") == "连接正常"
 
 
-def test_notification_maps_tp_cover_to_external_image_url(monkeypatch, tmp_path: Path) -> None:
+def test_notification_maps_tp_cover_to_external_image_url(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     connection = setup_database(tmp_path).connect()
     repository = SettingsRepository(connection)
     repository.upsert("telegram_bot_token", "bot-token", True)
@@ -147,7 +156,10 @@ def test_notification_maps_tp_cover_to_external_image_url(monkeypatch, tmp_path:
     assert sent[0][2] == "https://c0.jdbstatic.com/covers/yx/yx5O9r.jpg"
 
 
-def test_telegram_commands_bind_start_and_save_offset(monkeypatch, tmp_path: Path) -> None:
+def test_telegram_commands_bind_start_and_save_offset(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     connection = setup_database(tmp_path).connect()
     repository = SettingsRepository(connection)
     repository.upsert("telegram_bot_token", "bot-token", True)
@@ -161,7 +173,7 @@ def test_telegram_commands_bind_start_and_save_offset(monkeypatch, tmp_path: Pat
         def set_commands(self) -> None:
             commands_configured.append(True)
 
-        def get_updates(self, offset: int | None = None) -> list[dict]:
+        def get_updates(self, offset: int | None = None) -> list[dict[str, Any]]:
             assert offset is None
             return [
                 {
@@ -187,7 +199,10 @@ def test_telegram_commands_bind_start_and_save_offset(monkeypatch, tmp_path: Pat
     assert "已绑定当前会话" in sent[0][1]
 
 
-def test_telegram_commands_status_and_check(monkeypatch, tmp_path: Path) -> None:
+def test_telegram_commands_status_and_check(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     connection = setup_database(tmp_path).connect()
     repository = SettingsRepository(connection)
     repository.upsert("telegram_bot_token", "bot-token", True)
@@ -202,7 +217,7 @@ def test_telegram_commands_status_and_check(monkeypatch, tmp_path: Path) -> None
         def set_commands(self) -> None:
             return None
 
-        def get_updates(self, offset: int | None = None) -> list[dict]:
+        def get_updates(self, offset: int | None = None) -> list[dict[str, Any]]:
             assert offset == 10
             return [
                 {"update_id": 10, "message": {"chat": {"id": "abc"}, "text": "/status"}},
@@ -228,7 +243,10 @@ def test_telegram_commands_status_and_check(monkeypatch, tmp_path: Path) -> None
     ]
 
 
-def test_telegram_plain_text_enqueues_movie_lookup(monkeypatch, tmp_path: Path) -> None:
+def test_telegram_plain_text_enqueues_movie_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     connection = setup_database(tmp_path).connect()
     repository = SettingsRepository(connection)
     repository.upsert("telegram_bot_token", "bot-token", True)
@@ -242,7 +260,7 @@ def test_telegram_plain_text_enqueues_movie_lookup(monkeypatch, tmp_path: Path) 
         def set_commands(self) -> None:
             return None
 
-        def get_updates(self, offset: int | None = None) -> list[dict]:
+        def get_updates(self, offset: int | None = None) -> list[dict[str, Any]]:
             return [{"update_id": 12, "message": {"chat": {"id": "abc"}, "text": "ABC-123"}}]
 
         def send_message(self, chat_id: str, text: str) -> None:
@@ -264,7 +282,10 @@ def test_telegram_plain_text_enqueues_movie_lookup(monkeypatch, tmp_path: Path) 
     assert jobs.lookups == [("bot-token", "abc", "ABC-123")]
 
 
-def test_telegram_movie_subscribe_callback(monkeypatch, tmp_path: Path) -> None:
+def test_telegram_movie_subscribe_callback(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     connection = setup_database(tmp_path).connect()
     repository = SettingsRepository(connection)
     repository.upsert("telegram_bot_token", "bot-token", True)
@@ -279,7 +300,7 @@ def test_telegram_movie_subscribe_callback(monkeypatch, tmp_path: Path) -> None:
         def set_commands(self) -> None:
             return None
 
-        def get_updates(self, offset: int | None = None) -> list[dict]:
+        def get_updates(self, offset: int | None = None) -> list[dict[str, Any]]:
             return [
                 {
                     "update_id": 13,
@@ -310,7 +331,7 @@ def test_telegram_movie_subscribe_callback(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_telegram_expired_callback_does_not_block_update_offset(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     connection = setup_database(tmp_path).connect()
@@ -326,7 +347,7 @@ def test_telegram_expired_callback_does_not_block_update_offset(
         def set_commands(self) -> None:
             return None
 
-        def get_updates(self, offset: int | None = None) -> list[dict]:
+        def get_updates(self, offset: int | None = None) -> list[dict[str, Any]]:
             return [
                 {
                     "update_id": 14,

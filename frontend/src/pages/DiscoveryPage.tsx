@@ -4,6 +4,7 @@ import { client } from '../api';
 import { ActorDetailSheet } from '../components/discovery/ActorDetailSheet';
 import { MovieDetailSheet } from '../components/discovery/MovieDetailSheet';
 import { MoviePoster } from '../components/MoviePoster';
+import { useDetailHistory } from '../lib/useDetailHistory';
 import type { Follow, Movie } from '../types';
 import type { ActorRef } from '../lib/javdb';
 
@@ -11,16 +12,6 @@ const GENRES = [
   { key: 'can_play', label: '可播放' },
   { key: 'magnets', label: '有磁力' }
 ] as const;
-
-type SelectedMovie = {
-  readonly id: string;
-  readonly parentActor: ActorRef | null;
-};
-
-type SelectedActor = {
-  readonly actor: ActorRef;
-  readonly parentMovie: SelectedMovie | null;
-};
 
 export function DiscoveryPage() {
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -34,9 +25,9 @@ export function DiscoveryPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Movie[] | null>(null);
-  const [selectedMovie, setSelectedMovie] = useState<SelectedMovie | null>(null);
-  const [selectedActor, setSelectedActor] = useState<SelectedActor | null>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
+  const { selectedMovie, selectedActor, activeOverlayKind, openMovie, closeMovie, openActor, closeActor } =
+    useDetailHistory('discovery');
 
   const followByActorId = useMemo(
     () => Object.fromEntries(follows.map((follow) => [follow.actor_external_id, follow])),
@@ -133,38 +124,6 @@ export function DiscoveryPage() {
     await loadFollows();
   }
 
-  function openMovie(movieId: string, parentActor: ActorRef | null = null) {
-    setSelectedActor(null);
-    setSelectedMovie({ id: movieId, parentActor });
-  }
-
-  function closeMovie() {
-    const parentActor = selectedMovie?.parentActor ?? null;
-    setSelectedMovie(null);
-    if (parentActor) {
-      setSelectedActor({ actor: parentActor, parentMovie: null });
-    }
-  }
-
-  function openActor(actor: ActorRef, parentMovieId?: string) {
-    setSelectedMovie(null);
-    setSelectedActor({
-      actor: {
-        ...actor,
-        profile_url: actor.profile_url ?? `https://javdb.com/actors/${actor.id}`
-      },
-      parentMovie: parentMovieId ? { id: parentMovieId, parentActor: selectedMovie?.parentActor ?? null } : null
-    });
-  }
-
-  function closeActor() {
-    const parentMovie = selectedActor?.parentMovie ?? null;
-    setSelectedActor(null);
-    if (parentMovie) {
-      setSelectedMovie(parentMovie);
-    }
-  }
-
   return (
     <section>
       <h1 className="text-2xl font-semibold text-ink">发现</h1>
@@ -248,15 +207,18 @@ export function DiscoveryPage() {
       </div>
       {selectedMovie ? (
         <MovieDetailSheet
+          isTop={activeOverlayKind === 'movie'}
           movieId={selectedMovie.id}
           onClose={closeMovie}
           onOpenActor={openActor}
+          onOpenMovie={(movieId) => openMovie(movieId, selectedMovie.parentActor)}
         />
       ) : null}
       {selectedActor ? (
         <ActorDetailSheet
           actor={selectedActor.actor}
           follow={followByActorId[selectedActor.actor.id] ?? null}
+          isTop={activeOverlayKind === 'actor'}
           onClose={closeActor}
           onOpenMovie={openMovie}
           onSaveFollow={saveFollow}

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from app.adapters.javdb_api import JavdbApiClient
 from app.errors import ValidationAppError
 from app.repositories.follows import FollowsRepository
@@ -11,10 +13,10 @@ class FollowsService:
         self.repository = repository
         self.api = api
 
-    def check_all(self) -> list[dict]:
+    def check_all(self) -> list[dict[str, Any]]:
         return [self.check_one(follow) for follow in self.repository.list_enabled_actors()]
 
-    def check_one(self, follow: dict) -> dict:
+    def check_one(self, follow: dict[str, Any]) -> dict[str, Any]:
         if follow["type"] != "actor":
             raise ValidationAppError("Only actor follows can be checked")
         follow_id = int(follow["id"])
@@ -38,7 +40,7 @@ class FollowsService:
             "movies": new_movies,
         }
 
-    def baseline(self, follow: dict) -> None:
+    def baseline(self, follow: dict[str, Any]) -> None:
         follow_id = int(follow["id"])
         movies = collect_actor_movies(
             self.api,
@@ -49,12 +51,16 @@ class FollowsService:
         self.repository.add_seen_movies(follow_id, self._movie_ids(movies))
         self.repository.mark_checked(follow_id, 0)
 
-    def _new_movies(self, follow: dict, movies: list[dict]) -> list[dict]:
+    def _new_movies(
+        self,
+        follow: dict[str, Any],
+        movies: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         follow_id = int(follow["id"])
         seen = self.repository.list_seen_movie_ids(follow_id)
         if not seen and not follow.get("last_checked_at"):
             return []
         return [movie for movie in movies if str(movie["id"]) not in seen]
 
-    def _movie_ids(self, movies: list[dict]) -> list[str]:
+    def _movie_ids(self, movies: list[dict[str, Any]]) -> list[str]:
         return [str(movie["id"]) for movie in movies]

@@ -17,7 +17,7 @@ from app.repositories.tasks import TasksRepository
 from app.services.cloud import CloudServiceFactory
 from app.services.emby_metadata import EmbyMovieMetadata
 from app.services.notifier import NotificationService
-from app.services.organizer import CloudOrganizer
+from app.services.organizer import CloudOrganizer, OrganizeRequest
 from app.services.task_state import TaskStateService, TaskTransition
 
 LOGGER = logging.getLogger(__name__)
@@ -112,12 +112,7 @@ class DownloadMonitorService:
         self._state().transition(task_id, TaskTransition("organizing", "115_organizing"))
         self._commit()
         try:
-            plan = CloudOrganizer(cloud).organize(
-                str(remote.source_dir_id),
-                self.settings.require("p115_completed_dir_id"),
-                str(work["code"]),
-                self._metadata(work),
-            )
+            plan = CloudOrganizer(cloud).organize(self._organize_request(remote, work))
         except Exception as exc:
             self._mark_organize_failed(task, exc)
             return False
@@ -142,6 +137,23 @@ class DownloadMonitorService:
         self._commit()
         self._send_completed_notification(task, plan.target_dir_id)
         return True
+
+    def _organize_request(
+        self,
+        remote: CloudOfflineTask,
+        work: dict[str, Any],
+    ) -> OrganizeRequest:
+        download_root_id = self.settings.require("p115_download_dir_id")
+        if remote.download_root_id and remote.download_root_id != download_root_id:
+            raise ValueError("115 completed task is not under the configured download folder")
+        return OrganizeRequest(
+            source_dir_id=str(remote.source_dir_id),
+            download_root_id=download_root_id,
+            completed_root_id=self.settings.require("p115_completed_dir_id"),
+            code=str(work["code"]),
+            source_dir_name=remote.source_dir_name,
+            metadata=self._metadata(work),
+        )
 
     def _delete_completed_movie_follow(self, work: dict[str, Any]) -> None:
         movie_id = self._movie_id_from_source_url(str(work.get("source_url") or ""))

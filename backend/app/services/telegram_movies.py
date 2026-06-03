@@ -11,6 +11,7 @@ from app.repositories.follows import FollowsRepository
 from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.tasks import TasksRepository
+from app.services.javdb_movie_payload import JavdbMoviePayload, fetch_javdb_movie_payload
 from app.services.manual_offline import (
     ManualOfflineDependencies,
     ManualOfflineResult,
@@ -65,11 +66,12 @@ class TelegramMovieService:
         return self._card(merged)
 
     def subscribe(self, movie_id: str) -> str:
-        detail = self.javdb.movie_detail(movie_id)
+        payload = fetch_javdb_movie_payload(self.javdb, movie_id)
+        detail = payload.detail
         self._save_movie_follow(movie_id, detail, ["后台处理中"])
         self._commit()
         try:
-            result = self._submit_best_magnet(movie_id, detail)
+            result = self._submit_best_magnet(movie_id, payload)
         except Exception:
             self._save_movie_follow(movie_id, detail, ["提交失败"])
             self._commit()
@@ -85,13 +87,13 @@ class TelegramMovieService:
     def _submit_best_magnet(
         self,
         movie_id: str,
-        detail: dict[str, object],
+        payload: JavdbMoviePayload,
     ) -> ManualOfflineResult | None:
-        magnet = self._best_magnet(self.javdb.movie_magnets(movie_id))
+        magnet = self._best_magnet(payload.magnets)
         if magnet is None:
-            self._save_movie_follow(movie_id, detail, ["等待磁力"])
+            self._save_movie_follow(movie_id, payload.detail, ["等待磁力"])
             return None
-        return self._manual_offline().submit(movie_id, str(magnet["hash"]))
+        return self._manual_offline().submit_prefetched(movie_id, str(magnet["hash"]), payload)
 
     def _find_movie(self, query: str) -> dict[str, object] | None:
         movies = self.javdb.search(query.strip())

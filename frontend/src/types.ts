@@ -204,6 +204,13 @@ export type MovieReview = {
   created_at: string;
 };
 
+export type MovieBundle = {
+  detail: MovieDetail;
+  magnets: MagnetItem[];
+  reviews: MovieReview[];
+  reviews_error: string | null;
+};
+
 export type ActorDetail = {
   id: string;
   name: string;
