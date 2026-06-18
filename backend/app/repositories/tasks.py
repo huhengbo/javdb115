@@ -8,6 +8,8 @@ from app.security import iso_now
 
 UNFINISHED_STATUSES = ("submitted", "downloading")
 ACTIVE_DUPLICATE_STATUSES = ("submitted", "downloading", "organizing", "completed")
+INCOMPLETE_SUBMISSION_STATUS = "pending"
+INCOMPLETE_SUBMISSION_STAGE = "created"
 
 
 class TasksRepository:
@@ -28,6 +30,18 @@ class TasksRepository:
         placeholders = ", ".join("?" for _ in UNFINISHED_STATUSES)
         where_sql = f"WHERE t.status IN ({placeholders}) AND t.cloud_task_id IS NOT NULL"
         return self._list_tasks(where_sql, UNFINISHED_STATUSES, None)
+
+    def list_incomplete_submissions(self, cutoff_iso: str) -> list[dict[str, Any]]:
+        return self._list_tasks(
+            """
+            WHERE t.status = ?
+              AND t.stage = ?
+              AND t.cloud_task_id IS NULL
+              AND t.updated_at <= ?
+            """,
+            (INCOMPLETE_SUBMISSION_STATUS, INCOMPLETE_SUBMISSION_STAGE, cutoff_iso),
+            None,
+        )
 
     def find_blocking_duplicate_by_code(self, code: str) -> dict[str, Any] | None:
         placeholders = ", ".join("?" for _ in ACTIVE_DUPLICATE_STATUSES)

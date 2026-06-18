@@ -70,6 +70,20 @@ class SequenceFollowWorkflowClient(FollowWorkflowClient):
         return response
 
 
+class FailingActorClient(FollowWorkflowClient):
+    def actor_movies(
+        self,
+        actor_id: str,
+        tag_ids: list[str] | None = None,
+        sort_type: int = 0,
+        page: int = 1,
+        limit: int = 24,
+    ) -> list[dict[str, Any]]:
+        if actor_id == "actor-blocked":
+            raise RuntimeError("JAVDB_ACCESS_BLOCKED")
+        return [movie_summary()]
+
+
 class ManualClient:
     def movie_detail(self, movie_id: str) -> dict[str, Any]:
         assert movie_id == "abc123"
@@ -224,6 +238,36 @@ def test_follow_workflow_processes_first_match_after_empty_baseline(
     assert task["work"]["code"] == "ONE-001"
 
 
+def test_check_all_enabled_continues_after_actor_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    connection = setup_follow_database(monkeypatch, tmp_path)
+    blocked = actor_follow(
+        connection,
+        [],
+        [],
+        external_id="actor-blocked",
+        actor_name="Blocked Actor",
+    )
+    active = actor_follow(connection, ["s"], ["单体作品"], external_id="actor-active")
+    FollowsRepository(connection).add_seen_movies(int(cast(int, active["id"])), ["old-movie"])
+    connection.commit()
+
+    results = FollowWorkflowService(
+        follow_dependencies(connection, FailingActorClient())
+    ).check_all_enabled()
+    task = TasksRepository(connection).list_all()[0]
+    logs = LogsRepository(connection).list()
+    failed_log = next(log for log in logs if log["stage"] == "follow_check_failed")
+
+    assert len(results) == 2
+    assert sum(result.failed_count for result in results) == 1
+    assert task["status"] == "submitted"
+    assert task["actor"]["external_id"] == "actor-active"
+    assert failed_log["context"]["follow_id"] == blocked["id"]
+
+
 def test_follow_workflow_retry_uses_follow_rule(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -296,12 +340,15 @@ def actor_follow(
     connection: sqlite3.Connection,
     tag_ids: list[str],
     tag_names: list[str],
+    *,
+    external_id: str = "actor-1",
+    actor_name: str = "Actor One",
 ) -> dict[str, Any]:
     return FollowsRepository(connection).save(
-        "actor-1",
-        "Actor One",
-        "https://javdb.com/actors/actor-1",
-        "https://c0.jdbstatic.com/avatars/ac/actor-1.jpg",
+        external_id,
+        actor_name,
+        f"https://javdb.com/actors/{external_id}",
+        f"https://c0.jdbstatic.com/avatars/ac/{external_id}.jpg",
         tag_ids,
         tag_names,
     )

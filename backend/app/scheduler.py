@@ -31,15 +31,24 @@ class SchedulerService:
 
     async def _run(self) -> None:
         while not self._stop.is_set():
-            cron = self.cron_provider()
-            if not cron:
+            delay = self._next_delay_seconds()
+            if delay is None:
                 await self._wait_seconds(SCHEDULER_IDLE_WAIT_SECONDS)
                 continue
-            next_time = croniter(cron, now_utc()).get_next(float)
-            delay = max(MIN_JOB_DELAY_SECONDS, next_time - now_utc().timestamp())
             if await self._wait_seconds(delay):
                 return
             await self._run_job()
+
+    def _next_delay_seconds(self) -> float | None:
+        try:
+            cron = self.cron_provider()
+            if not cron:
+                return None
+            next_time = croniter(cron, now_utc()).get_next(float)
+            return max(MIN_JOB_DELAY_SECONDS, next_time - now_utc().timestamp())
+        except Exception:
+            LOGGER.exception("Scheduled cron evaluation failed")
+            return None
 
     async def _run_job(self) -> None:
         try:

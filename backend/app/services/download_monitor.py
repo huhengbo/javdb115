@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any, cast
 from urllib.parse import urlparse
 
@@ -14,6 +15,7 @@ from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.task_events import TaskEventsRepository
 from app.repositories.tasks import TasksRepository
+from app.security import now_utc
 from app.services.cloud import CloudServiceFactory
 from app.services.emby_metadata import EmbyMovieMetadata
 from app.services.notifier import NotificationService
@@ -21,6 +23,7 @@ from app.services.organizer import CloudOrganizer, OrganizeRequest
 from app.services.task_state import TaskStateService, TaskTransition
 
 LOGGER = logging.getLogger(__name__)
+INCOMPLETE_SUBMIT_TIMEOUT_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -49,12 +52,35 @@ class DownloadMonitorService:
         self.tasks = dependencies.tasks
 
     def poll_unfinished(self) -> DownloadMonitorResult:
+        recovered_count = self._fail_incomplete_submissions()
+        remote_result = self._poll_remote_tasks()
+        return DownloadMonitorResult(
+            checked_count=remote_result.checked_count + recovered_count,
+            downloading_count=remote_result.downloading_count,
+            completed_count=remote_result.completed_count,
+            failed_count=remote_result.failed_count + recovered_count,
+        )
+
+    def _poll_remote_tasks(self) -> DownloadMonitorResult:
         tasks = self.tasks.list_unfinished()
         if not tasks:
             return DownloadMonitorResult(0, 0, 0, 0)
         cloud = CloudServiceFactory(self.settings).create()
         remote_tasks = cloud.get_offline_tasks(self._cloud_task_ids(tasks))
         return self._apply_remote_tasks(tasks, remote_tasks, cloud)
+
+    def _fail_incomplete_submissions(self) -> int:
+        tasks = self.tasks.list_incomplete_submissions(self._incomplete_submit_cutoff())
+        for task in tasks:
+            self._fail_task(task, "115_submit_incomplete", self._incomplete_submit_message())
+        return len(tasks)
+
+    def _incomplete_submit_cutoff(self) -> str:
+        timeout = timedelta(seconds=INCOMPLETE_SUBMIT_TIMEOUT_SECONDS)
+        return (now_utc() - timeout).isoformat()
+
+    def _incomplete_submit_message(self) -> str:
+        return "115 离线提交未完成：任务创建后没有拿到 115 task id"
 
     def _apply_remote_tasks(
         self,

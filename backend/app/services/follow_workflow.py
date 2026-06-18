@@ -64,10 +64,33 @@ class FollowWorkflowService:
         self.javdb = dependencies.javdb
 
     def check_all_enabled(self) -> list[FollowWorkflowResult]:
-        return [
-            self.check_follow(int(cast(int, follow["id"])))
-            for follow in self.follows.list_enabled_actors()
-        ]
+        results: list[FollowWorkflowResult] = []
+        for follow in self.follows.list_enabled_actors():
+            follow_id = int(cast(int, follow["id"]))
+            try:
+                results.append(self.check_follow(follow_id))
+                self._commit()
+            except Exception as exc:
+                LOGGER.exception("Actor follow check failed: %s", follow_id)
+                results.append(self._record_follow_check_failure(follow, exc))
+        return results
+
+    def _record_follow_check_failure(
+        self,
+        follow: dict[str, object],
+        exc: Exception,
+    ) -> FollowWorkflowResult:
+        self.tasks.connection.rollback()
+        context = {
+            "follow_id": follow["id"],
+            "actor_external_id": follow.get("actor_external_id"),
+            "actor_name": follow.get("actor_name"),
+        }
+        self.logs.add("error", "follow_check_failed", str(exc), None, context)
+        self._commit()
+        warning = f"演员检查失败，已跳过: {follow.get('actor_name')} ({exc})"
+        return FollowWorkflowResult(0, 1, [warning])
+
 
     def check_follow(self, follow_id: int) -> FollowWorkflowResult:
         follow = self.follows.get(follow_id)
