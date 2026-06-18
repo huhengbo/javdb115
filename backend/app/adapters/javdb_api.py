@@ -38,6 +38,13 @@ ACTOR_SORT_BY_MAP = {
 }
 ACTOR_FILTER_PRIORITY = ("s", "m", "c", "p", "1", "0")
 TYPE_TAG_IDS = {"0", "1"}
+MOVIE_DETAIL_LIST_FIELDS = (
+    "actors",
+    "tags",
+    "preview_images",
+    "relative_movies",
+    "actor_movies",
+)
 JAVDB_CACHE_MAX_ENTRIES = 512
 JAVDB_SHORT_CACHE_TTL_SECONDS = 300
 JAVDB_MEDIUM_CACHE_TTL_SECONDS = 1800
@@ -232,7 +239,7 @@ class JavdbApiClient:
 
     def movie_detail(self, movie_id: str) -> dict[str, Any]:
         data = self._dict_value(self._get(f"/api/v4/movies/{movie_id}"), "data")
-        return self._dict_value(data, "movie")
+        return self._normalize_movie_detail(self._dict_value(data, "movie"))
 
     def movie_magnets(self, movie_id: str) -> list[dict[str, Any]]:
         data = self._dict_value(self._get(f"/api/v1/movies/{movie_id}/magnets"), "data")
@@ -390,3 +397,10 @@ class JavdbApiClient:
 
     def movie_source_url(self, movie_id: str) -> str:
         return urljoin(f"{self._site_base_url}/", f"v/{movie_id}")
+
+    def _normalize_movie_detail(self, detail: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(detail)
+        for field in MOVIE_DETAIL_LIST_FIELDS:
+            if not isinstance(normalized.get(field), list):
+                normalized[field] = []
+        return normalized

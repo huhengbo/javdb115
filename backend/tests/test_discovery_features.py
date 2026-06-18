@@ -54,6 +54,36 @@ class ApiCaptureBrowser:
         return json.dumps({"data": {"movies": [{"id": "movie-1"}]}})
 
 
+class NullableMovieDetailTransport:
+    def javdb_api_get(self, path: str, query: str, sig: str) -> str:
+        assert path == "/api/v4/movies/fc2-id"
+        return json.dumps(
+            {
+                "data": {
+                    "movie": {
+                        "id": "fc2-id",
+                        "number": "FC2-3179516",
+                        "actors": None,
+                        "tags": None,
+                        "preview_images": None,
+                        "relative_movies": None,
+                        "actor_movies": None,
+                    }
+                }
+            }
+        )
+
+
+def test_movie_detail_normalizes_nullable_collections_from_javdb() -> None:
+    detail = JavdbApiClient(NullableMovieDetailTransport()).movie_detail("fc2-id")
+
+    assert detail["actors"] == []
+    assert detail["tags"] == []
+    assert detail["preview_images"] == []
+    assert detail["relative_movies"] == []
+    assert detail["actor_movies"] == []
+
+
 def test_follows_repository_upserts_actor_rule(tmp_path: Path) -> None:
     connection = setup_database(tmp_path).connect()
     repository = FollowsRepository(connection)
