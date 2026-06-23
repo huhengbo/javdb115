@@ -24,6 +24,7 @@ from app.services.task_state import TaskStateService, TaskTransition
 
 LOGGER = logging.getLogger(__name__)
 INCOMPLETE_SUBMIT_TIMEOUT_SECONDS = 300
+STALE_ORGANIZING_TIMEOUT_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -62,12 +63,20 @@ class DownloadMonitorService:
         )
 
     def _poll_remote_tasks(self) -> DownloadMonitorResult:
-        tasks = self.tasks.list_unfinished()
+        tasks = self._remote_poll_tasks()
         if not tasks:
             return DownloadMonitorResult(0, 0, 0, 0)
         cloud = CloudServiceFactory(self.settings).create()
         remote_tasks = cloud.get_offline_tasks(self._cloud_task_ids(tasks))
         return self._apply_remote_tasks(tasks, remote_tasks, cloud)
+
+    def _remote_poll_tasks(self) -> list[dict[str, Any]]:
+        stale_organizing = self.tasks.list_stale_organizing(self._stale_organizing_cutoff())
+        return [*stale_organizing, *self.tasks.list_unfinished()]
+
+    def _stale_organizing_cutoff(self) -> str:
+        timeout = timedelta(seconds=STALE_ORGANIZING_TIMEOUT_SECONDS)
+        return (now_utc() - timeout).isoformat()
 
     def _fail_incomplete_submissions(self) -> int:
         tasks = self.tasks.list_incomplete_submissions(self._incomplete_submit_cutoff())
@@ -116,6 +125,10 @@ class DownloadMonitorService:
             return
         if remote.status == "failed":
             self._mark_download_failed(task, remote)
+            counts["failed"] += 1
+            return
+        if self._is_local_organizing(task):
+            self._mark_organize_state_mismatch(task, remote)
             counts["failed"] += 1
             return
         self._mark_downloading(task, remote)
@@ -209,6 +222,17 @@ class DownloadMonitorService:
 
     def _mark_organize_failed(self, task: dict[str, Any], exc: Exception) -> None:
         self._fail_task(task, "115_organize_failed", str(exc))
+
+    def _mark_organize_state_mismatch(
+        self,
+        task: dict[str, Any],
+        remote: CloudOfflineTask,
+    ) -> None:
+        message = f"本地任务停在整理中，但 115 任务状态为 {remote.status}"
+        self._fail_task(task, "115_organize_state_mismatch", message)
+
+    def _is_local_organizing(self, task: dict[str, Any]) -> bool:
+        return task.get("status") == "organizing"
 
     def _fail_task(self, task: dict[str, Any], stage: str, message: str) -> None:
         task_id = int(cast(int, task["id"]))

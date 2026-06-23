@@ -10,6 +10,8 @@ UNFINISHED_STATUSES = ("submitted", "downloading")
 ACTIVE_DUPLICATE_STATUSES = ("submitted", "downloading", "organizing", "completed")
 INCOMPLETE_SUBMISSION_STATUS = "pending"
 INCOMPLETE_SUBMISSION_STAGE = "created"
+ORGANIZING_STATUS = "organizing"
+ORGANIZING_STAGE = "115_organizing"
 
 
 class TasksRepository:
@@ -40,6 +42,18 @@ class TasksRepository:
               AND t.updated_at <= ?
             """,
             (INCOMPLETE_SUBMISSION_STATUS, INCOMPLETE_SUBMISSION_STAGE, cutoff_iso),
+            None,
+        )
+
+    def list_stale_organizing(self, cutoff_iso: str) -> list[dict[str, Any]]:
+        return self._list_tasks(
+            """
+            WHERE t.status = ?
+              AND t.stage = ?
+              AND t.cloud_task_id IS NOT NULL
+              AND t.updated_at <= ?
+            """,
+            (ORGANIZING_STATUS, ORGANIZING_STAGE, cutoff_iso),
             None,
         )
 
