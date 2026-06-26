@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-ALLOWED_IMAGE_HOSTS = {"tp.cmastd.com", "c0.jdbstatic.com", "javdb.com"}
-TP_MEDIA_HOST = "tp.cmastd.com"
+TP_MEDIA_HOSTS = frozenset({"tp.cmastd.com", "tp.spfcas.com"})
 JDBSTATIC_HOST = "c0.jdbstatic.com"
+ALLOWED_IMAGE_HOSTS = {*TP_MEDIA_HOSTS, JDBSTATIC_HOST, "javdb.com"}
 TP_TOKENIZED_DIRECTORIES = frozenset({"avatars", "covers", "samples", "small_covers"})
 SMALL_COVER_DIRECTORY = "small_covers"
 COVER_DIRECTORY = "covers"
@@ -13,7 +13,7 @@ COVER_DIRECTORY = "covers"
 def build_upstream_image_url(host: str, path: str) -> str:
     normalized_host = host
     path_parts = path.lstrip("/").split("/")
-    if host == TP_MEDIA_HOST:
+    if host in TP_MEDIA_HOSTS:
         if len(path_parts) >= 2 and path_parts[1] in TP_TOKENIZED_DIRECTORIES:
             path_parts = path_parts[1:]
         if path_parts and path_parts[0] == SMALL_COVER_DIRECTORY:

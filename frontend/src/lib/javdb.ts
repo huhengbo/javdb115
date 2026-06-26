@@ -18,6 +18,11 @@ export type ActorRef = {
 const BYTES_PER_KB = 1024;
 const BYTES_PER_MB = BYTES_PER_KB * 1024;
 const BYTES_PER_GB = BYTES_PER_MB * 1024;
+const IMAGE_PROXY_PREFIXES = [
+  ['https://tp.cmastd.com/', '/api/img/tp.cmastd.com/'],
+  ['https://tp.spfcas.com/', '/api/img/tp.spfcas.com/'],
+  ['https://c0.jdbstatic.com/', '/api/img/c0.jdbstatic.com/']
+] as const;
 
 export const FOLLOW_TAG_OPTIONS: readonly ActorTagOption[] = [
   { id: '0', name: '有码' },
@@ -40,9 +45,12 @@ export function imgUrl(url: string): string {
   if (!url) {
     return '';
   }
-  return url
-    .replace('https://tp.cmastd.com/', '/api/img/tp.cmastd.com/')
-    .replace('https://c0.jdbstatic.com/', '/api/img/c0.jdbstatic.com/');
+  for (const [sourcePrefix, proxyPrefix] of IMAGE_PROXY_PREFIXES) {
+    if (url.startsWith(sourcePrefix)) {
+      return `${proxyPrefix}${url.slice(sourcePrefix.length)}`;
+    }
+  }
+  return url;
 }
 
 export function formatMagnetSize(sizeMb: number): string {
