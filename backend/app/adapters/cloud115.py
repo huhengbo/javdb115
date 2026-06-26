@@ -27,6 +27,8 @@ OFFLINE_STATUS_QUERIES = (
     (11, "completed"),
 )
 OFFLINE_DUPLICATE_ERRCODE = 10008
+CLOUDDOWNLOAD_ADD_URL_METHOD = "clouddownload_task_add_url"
+CLOUDDOWNLOAD_LIST_METHOD = "clouddownload_task_list"
 
 
 class Cloud115Client:
@@ -113,7 +115,7 @@ class P115CloudClient(Cloud115Client):
         payload = {"url": url, "wp_path_id": target_dir_id}
         if savepath:
             payload["savepath"] = savepath
-        result = self._call("offline_add_url", payload)
+        result = self._call(CLOUDDOWNLOAD_ADD_URL_METHOD, payload)
         task_id = self._first_present(result, ["info_hash", "task_id", "id"])
         if task_id:
             return str(task_id)
@@ -160,7 +162,7 @@ class P115CloudClient(Cloud115Client):
         page = 1
         while True:
             payload = {"page": page, "page_size": OFFLINE_PAGE_SIZE, "stat": remote_stat}
-            result = self._call("offline_list", payload)
+            result = self._call(CLOUDDOWNLOAD_LIST_METHOD, payload)
             yield from self._extract_offline_items(result)
             page_count = self._page_count(result, page)
             if page >= page_count:
@@ -221,12 +223,17 @@ class P115CloudClient(Cloud115Client):
         if isinstance(result, dict) and result.get("state") is False:
             if self._is_existing_offline_task(method_name, result):
                 return
-            message = result.get("error") or result.get("message") or "115 cookie is invalid"
+            message = (
+                result.get("error")
+                or result.get("error_msg")
+                or result.get("message")
+                or "115 cookie is invalid"
+            )
             raise IntegrationError(f"115 API call failed at {method_name}: {message}")
 
     def _is_existing_offline_task(self, method_name: str, result: dict[str, Any]) -> bool:
         return (
-            method_name == "offline_add_url"
+            method_name == CLOUDDOWNLOAD_ADD_URL_METHOD
             and self._error_code(result) == OFFLINE_DUPLICATE_ERRCODE
             and self._first_present(result, ["info_hash"]) is not None
         )

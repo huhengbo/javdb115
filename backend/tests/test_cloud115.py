@@ -49,7 +49,7 @@ class InvalidP115Client(FakeP115Client):
 
 
 class OfflineP115Client(FakeP115Client):
-    def offline_list(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def clouddownload_task_list(self, payload: dict[str, Any]) -> dict[str, Any]:
         stat = payload["stat"]
         tasks = {
             12: [{"info_hash": "down-hash", "percentDone": 42, "status": 1}],
@@ -73,7 +73,7 @@ class OfflineP115Client(FakeP115Client):
 
 
 class DuplicateOfflineP115Client(FakeP115Client):
-    def offline_add_url(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def clouddownload_task_add_url(self, payload: dict[str, Any]) -> dict[str, Any]:
         assert payload == {
             "url": "magnet:?xt=urn:btih:dup-hash",
             "wp_path_id": "target-dir",
