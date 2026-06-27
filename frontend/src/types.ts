@@ -95,21 +95,38 @@ export type P115Status = {
   configured: boolean;
   ok: boolean;
   message: string;
+  checked_at: string | null;
   account: P115Account | null;
+};
+
+export type JavdbStatus = {
+  ok: boolean;
+  message: string;
+  checked_at: string;
 };
 
 export type ConnectionStatus = {
   p115: P115Status;
+  javdb: JavdbStatus;
+};
+
+export type TaskBreakdown = {
+  by_status: Record<string, number>;
+  by_stage: Record<string, number>;
+  attention: number;
 };
 
 export type Dashboard = {
   stats: {
     submitted: number;
     downloading: number;
+    organizing: number;
     completed: number;
     failed: number;
   };
+  task_breakdown: TaskBreakdown;
   connections: ConnectionStatus;
+  attention_tasks: Task[];
   recent_tasks: Task[];
 };
 

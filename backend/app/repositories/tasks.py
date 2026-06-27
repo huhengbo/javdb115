@@ -102,6 +102,29 @@ class TasksRepository:
         ).fetchall()
         return {str(row["status"]): int(row["count"]) for row in rows}
 
+    def stage_counts(self) -> dict[str, int]:
+        rows = self.connection.execute(
+            "SELECT stage, COUNT(*) AS count FROM tasks GROUP BY stage"
+        ).fetchall()
+        return {str(row["stage"]): int(row["count"]) for row in rows}
+
+    def attention_count(self) -> int:
+        row = self.connection.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM tasks
+            WHERE status IN ('failed', 'organizing')
+            """
+        ).fetchone()
+        return int(row["count"])
+
+    def list_attention(self, limit: int = 6) -> list[dict[str, Any]]:
+        return self._list_tasks(
+            "WHERE t.status IN ('failed', 'organizing')",
+            (),
+            limit,
+        )
+
     def get_raw(self, task_id: int) -> dict[str, Any] | None:
         row = self.connection.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return None if row is None else dict(row)

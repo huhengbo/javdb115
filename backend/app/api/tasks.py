@@ -61,14 +61,22 @@ def dashboard(
     repository = TasksRepository(connection)
     settings = SettingsRepository(connection)
     counts = repository.counts()
+    stage_counts = repository.stage_counts()
     stats = {
         "submitted": counts.get("submitted", 0),
         "downloading": counts.get("downloading", 0),
+        "organizing": counts.get("organizing", 0),
         "completed": counts.get("completed", 0),
         "failed": counts.get("failed", 0),
     }
     return {
         "stats": stats,
+        "task_breakdown": {
+            "by_status": counts,
+            "by_stage": stage_counts,
+            "attention": repository.attention_count(),
+        },
         "connections": IntegrationStatusService(settings).dashboard_status(),
+        "attention_tasks": repository.list_attention(6),
         "recent_tasks": repository.list_all(8),
     }

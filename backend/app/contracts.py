@@ -176,8 +176,15 @@ class DirectoryItem(BaseModel):
 class DashboardStats(BaseModel):
     submitted: int
     downloading: int
+    organizing: int = 0
     completed: int
     failed: int
+
+
+class TaskBreakdown(BaseModel):
+    by_status: dict[str, int] = Field(default_factory=dict)
+    by_stage: dict[str, int] = Field(default_factory=dict)
+    attention: int = 0
 
 
 class P115AccountOut(BaseModel):
@@ -201,16 +208,26 @@ class P115StatusOut(BaseModel):
     configured: bool
     ok: bool
     message: str
+    checked_at: str | None = None
     account: P115AccountOut | None = None
+
+
+class JavdbStatusOut(BaseModel):
+    ok: bool
+    message: str
+    checked_at: str
 
 
 class ConnectionStatusOut(BaseModel):
     p115: P115StatusOut
+    javdb: JavdbStatusOut
 
 
 class DashboardOut(BaseModel):
     stats: DashboardStats
+    task_breakdown: TaskBreakdown
     connections: ConnectionStatusOut
+    attention_tasks: list[TaskOut] = Field(default_factory=list)
     recent_tasks: list[TaskOut]
 
 

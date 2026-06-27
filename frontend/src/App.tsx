@@ -11,13 +11,30 @@ import { TasksPage } from './pages/TasksPage';
 
 type Tab = 'dashboard' | 'discovery' | 'rankings' | 'following' | 'tasks' | 'settings';
 
+const TAB_PATHS: Record<Tab, string> = {
+  dashboard: '/',
+  discovery: '/discovery',
+  rankings: '/rankings',
+  following: '/following',
+  tasks: '/tasks',
+  settings: '/settings'
+};
+
 export default function App() {
   const [loggedIn, setLoggedIn] = useState(Boolean(getToken()));
-  const [tab, setTab] = useState<Tab>('dashboard');
+  const [tab, setTab] = useState<Tab>(() => tabFromPath(window.location.pathname));
 
   const logout = useCallback(() => {
     clearToken();
     setLoggedIn(false);
+  }, []);
+
+  const changeTab = useCallback((nextTab: Tab) => {
+    const nextPath = TAB_PATHS[nextTab];
+    setTab(nextTab);
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, '', nextPath);
+    }
   }, []);
 
   useEffect(() => {
@@ -30,13 +47,19 @@ export default function App() {
     return () => window.removeEventListener('auth-expired', handler);
   }, []);
 
+  useEffect(() => {
+    const handler = () => setTab(tabFromPath(window.location.pathname));
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, []);
+
   if (!loggedIn) {
     return <LoginPage onLoggedIn={() => setLoggedIn(true)} />;
   }
 
   return (
-    <AppShell active={tab} onChange={setTab} onLogout={logout}>
-      {tab === 'dashboard' ? <DashboardPage onOpenSettings={() => setTab('settings')} /> : null}
+    <AppShell active={tab} onChange={changeTab} onLogout={logout} onOpenSettings={() => changeTab('settings')}>
+      {tab === 'dashboard' ? <DashboardPage onOpenSettings={() => changeTab('settings')} /> : null}
       {tab === 'discovery' ? <DiscoveryPage /> : null}
       {tab === 'rankings' ? <RankingsPage /> : null}
       {tab === 'following' ? <FollowingPage /> : null}
@@ -44,4 +67,24 @@ export default function App() {
       {tab === 'settings' ? <SettingsPage /> : null}
     </AppShell>
   );
+}
+
+function tabFromPath(pathname: string): Tab {
+  const firstSegment = pathname.split('/').filter(Boolean)[0] ?? '';
+  if (firstSegment === 'discovery') {
+    return 'discovery';
+  }
+  if (firstSegment === 'rankings') {
+    return 'rankings';
+  }
+  if (firstSegment === 'following') {
+    return 'following';
+  }
+  if (firstSegment === 'tasks') {
+    return 'tasks';
+  }
+  if (firstSegment === 'settings') {
+    return 'settings';
+  }
+  return 'dashboard';
 }
