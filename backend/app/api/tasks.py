@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.contracts import DashboardOut, TaskHistoryItem, TaskOut
 from app.dependencies import get_connection, require_user
+from app.errors import NotFoundError
 from app.repositories.catalog import CatalogRepository
 from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
@@ -51,6 +52,17 @@ def retry_task(
             settings=SettingsRepository(connection),
         )
     ).retry(task_id)
+    return {"ok": True}
+
+
+@router.delete("/tasks/{task_id}")
+def delete_task(
+    task_id: int,
+    connection: Connection = Depends(get_connection),
+) -> dict[str, bool]:
+    deleted = TasksRepository(connection).delete(task_id)
+    if not deleted:
+        raise NotFoundError(f"Task not found: {task_id}")
     return {"ok": True}
 
 

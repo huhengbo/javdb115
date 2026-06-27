@@ -7,6 +7,7 @@ from typing import Any, cast
 from app.database import Database
 from app.errors import IntegrationError
 from app.repositories.settings import SettingsRepository
+from app.repositories.task_events import TaskEventsRepository
 from app.repositories.tasks import TasksRepository
 from app.security import iso_now
 from app.services.integration_status import IntegrationStatusService
@@ -24,6 +25,28 @@ def test_task_breakdown_counts_attention_tasks(tmp_path: Path) -> None:
     assert repository.stage_counts()["115_organize_failed"] == 1
     assert repository.attention_count() == 2
     assert [task["status"] for task in repository.list_attention()] == ["failed", "organizing"]
+
+
+def test_task_delete_removes_task_and_events(tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    insert_task(connection, "failed", "115_organize_failed")
+    task_id = int(connection.execute("SELECT id FROM tasks").fetchone()["id"])
+    TaskEventsRepository(connection).add(
+        task_id,
+        from_status=None,
+        to_status="failed",
+        from_stage=None,
+        to_stage="115_organize_failed",
+        message="failed",
+        context={},
+    )
+
+    repository = TasksRepository(connection)
+
+    assert repository.delete(task_id) is True
+    assert repository.get(task_id) is None
+    assert TaskEventsRepository(connection).list_for_tasks([task_id]) == {}
+    assert repository.delete(task_id) is False
 
 
 def test_dashboard_status_reports_javdb_access_health(tmp_path: Path) -> None:

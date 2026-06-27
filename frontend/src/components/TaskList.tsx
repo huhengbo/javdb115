@@ -1,6 +1,7 @@
-import { AlertTriangle, Check, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, Loader2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { client } from '../api';
+import { ConfirmDialog } from './discovery/ConfirmDialog';
 import {
   formatDateTime,
   formatRelativeTime,
@@ -23,22 +24,75 @@ type Props = {
 const TIMELINE_STEPS = ['提交', '下载', '整理', '完成'] as const;
 
 export function TaskList({ tasks, onChanged }: Props) {
+  const deletion = useTaskDeletion(onChanged);
+
   if (tasks.length === 0) {
     return <p className="rounded-lg border border-line bg-white p-4 text-sm text-slate-500">暂无任务</p>;
   }
+
   return (
-    <div className="space-y-3">
-      {tasks.map((task) => (
-        <article key={task.id} className="rounded-lg border border-line bg-white p-4">
-          <TaskHeader task={task} />
-          <TaskTimeline task={task} />
-          <TaskDetails task={task} />
-          <TaskIssueBlock task={task} />
-          {task.status === 'failed' ? <RetryButton taskId={task.id} onChanged={onChanged} /> : null}
-        </article>
-      ))}
-    </div>
+    <>
+      <div className="space-y-3">
+        {tasks.map((task) => (
+          <article key={task.id} className="rounded-lg border border-line bg-white p-4">
+            <TaskHeader task={task} />
+            <TaskTimeline task={task} />
+            <TaskDetails task={task} />
+            <TaskIssueBlock task={task} />
+            {task.status === 'failed' ? <RetryButton taskId={task.id} onChanged={onChanged} /> : null}
+            <DeleteButton task={task} onClick={() => deletion.open(task)} />
+          </article>
+        ))}
+      </div>
+      {deletion.task ? (
+        <ConfirmDialog
+          danger
+          busy={deletion.busy}
+          confirmLabel="删除"
+          description={<DeleteDescription error={deletion.error} task={deletion.task} />}
+          title="删除任务记录"
+          onCancel={deletion.close}
+          onConfirm={deletion.confirm}
+        />
+      ) : null}
+    </>
   );
+}
+
+function useTaskDeletion(onChanged?: () => void) {
+  const [task, setTask] = useState<Task | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirm() {
+    if (!task) {
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      await client.deleteTask(task.id);
+      setTask(null);
+      onChanged?.();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function open(nextTask: Task) {
+    setError(null);
+    setTask(nextTask);
+  }
+
+  function close() {
+    if (!busy) {
+      setTask(null);
+    }
+  }
+
+  return { busy, close, confirm, error, open, task };
 }
 
 function TaskHeader({ task }: { readonly task: Task }) {
@@ -120,6 +174,34 @@ function actorText(task: Task): string {
 
 function directoryLabel(task: Task): string {
   return task.cloud_file_name || task.work?.code || task.cloud_file_id || '';
+}
+
+function DeleteButton({ task, onClick }: { readonly task: Task; readonly onClick: () => void }) {
+  return (
+    <button
+      aria-label={`删除任务 ${task.work?.code ?? task.id}`}
+      className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-red-100 px-3 text-sm font-medium text-danger"
+      onClick={onClick}
+      type="button"
+    >
+      <Trash2 size={16} />
+      删除记录
+    </button>
+  );
+}
+
+function DeleteDescription({ error, task }: { readonly error: string | null; readonly task: Task }) {
+  return (
+    <div className="space-y-2">
+      <p>
+        确认删除 {task.work?.code ?? `任务 #${task.id}`} 的本地任务记录？
+      </p>
+      <p className="text-xs text-slate-500">
+        这不会取消 115 离线任务，也不会删除 115 网盘文件。
+      </p>
+      {error ? <p className="rounded-md bg-red-50 p-2 text-xs text-danger">{error}</p> : null}
+    </div>
+  );
 }
 
 function RetryButton({ taskId, onChanged }: { readonly taskId: number; readonly onChanged?: () => void }) {

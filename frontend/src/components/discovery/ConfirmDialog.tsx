@@ -6,11 +6,13 @@ type Props = {
   readonly description: ReactNode;
   readonly confirmLabel: string;
   readonly busy?: boolean;
+  readonly danger?: boolean;
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
 };
 
 export function ConfirmDialog(props: Props) {
+  const confirmClass = props.danger ? 'bg-danger text-white' : 'bg-brand text-white';
   return (
     <div className="fixed inset-0 z-[80] flex items-end bg-black/60 sm:items-center sm:justify-center">
       <div className="w-full rounded-t-2xl bg-white p-4 sm:max-w-md sm:rounded-2xl">
@@ -36,7 +38,7 @@ export function ConfirmDialog(props: Props) {
             取消
           </button>
           <button
-            className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-brand px-3 text-sm font-medium text-white disabled:opacity-60"
+            className={`flex min-h-11 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium disabled:opacity-60 ${confirmClass}`}
             disabled={props.busy}
             onClick={props.onConfirm}
             type="button"

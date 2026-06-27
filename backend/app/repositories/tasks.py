@@ -129,6 +129,10 @@ class TasksRepository:
         row = self.connection.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return None if row is None else dict(row)
 
+    def delete(self, task_id: int) -> bool:
+        cursor = self.connection.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        return cursor.rowcount > 0
+
     def create(self, work_id: int | None, actor_id: int | None, magnet_id: int | None) -> int:
         now = iso_now()
         cursor = self.connection.execute(

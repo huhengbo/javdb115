@@ -68,6 +68,7 @@ export const client = {
   runCheck: () => api<{ ok: boolean }>('/api/checks/run', { method: 'POST' }),
   tasks: () => api<Task[]>('/api/tasks'),
   retryTask: (id: number) => api<{ ok: boolean }>(`/api/tasks/${id}/retry`, { method: 'POST' }),
+  deleteTask: (id: number) => api<{ ok: boolean }>(`/api/tasks/${id}`, { method: 'DELETE' }),
   taskHistory: (code: string) => api<TaskHistoryItem[]>(`/api/tasks/by-work/${encodeURIComponent(code)}`),
   settings: () => api<SettingItem[]>('/api/settings'),
   saveSettings: (items: SettingItem[]) => api<{ ok: boolean }>('/api/settings', { method: 'PUT', body: JSON.stringify({ items }) }),
