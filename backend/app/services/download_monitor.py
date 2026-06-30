@@ -17,6 +17,7 @@ from app.repositories.task_events import TaskEventsRepository
 from app.repositories.tasks import TasksRepository
 from app.security import now_utc
 from app.services.cloud import CloudServiceFactory
+from app.services.completed_directory import CompletedDirectoryResolver
 from app.services.emby_metadata import EmbyMovieMetadata
 from app.services.notifier import NotificationService
 from app.services.organizer import CloudOrganizer, OrganizeRequest
@@ -188,7 +189,9 @@ class DownloadMonitorService:
         return OrganizeRequest(
             source_dir_id=str(remote.source_dir_id),
             download_root_id=download_root_id,
-            completed_root_id=self.settings.require("p115_completed_dir_id"),
+            completed_root_id=CompletedDirectoryResolver(self.settings).completed_root_id(
+                str(work["code"])
+            ),
             code=str(work["code"]),
             source_dir_name=remote.source_dir_name,
             metadata=self._metadata(work),

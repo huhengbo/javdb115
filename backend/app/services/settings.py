@@ -4,6 +4,7 @@ import json
 
 from app.contracts import FilterRules
 from app.repositories.settings import OBSOLETE_KEYS, SettingsRepository
+from app.services.completed_directory import COMPLETED_DIR_MODE_KEY, COMPLETED_DIR_MODE_SINGLE
 
 DEFAULT_CHECK_CRON = "0 */6 * * *"
 DEFAULT_FILTER_RULES = FilterRules(min_size_gb=1, required_keywords=[], excluded_keywords=[])
@@ -11,6 +12,7 @@ DEFAULT_FILTER_RULES_JSON = DEFAULT_FILTER_RULES.model_dump_json()
 DEFAULT_PUBLIC_SETTINGS = {
     "check_cron": DEFAULT_CHECK_CRON,
     "filter_rules": DEFAULT_FILTER_RULES_JSON,
+    COMPLETED_DIR_MODE_KEY: COMPLETED_DIR_MODE_SINGLE,
 }
 REVEAL_SECRET_KEYS = {"p115_cookie"}
 
