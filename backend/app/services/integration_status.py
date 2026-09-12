@@ -46,7 +46,7 @@ class IntegrationStatusService:
             account = account_from_user(current_user())
         except AppError as exc:
             return self._javdb_result(
-                True,
+                False,
                 True,
                 f"JavDB 登录已失效：{exc.message}",
                 checked_at,
