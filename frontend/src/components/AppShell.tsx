@@ -41,8 +41,11 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <h1 className="truncate text-[17px] font-semibold tracking-[-0.01em] text-ink">{pageTitles[active]}</h1>
           <div className="flex items-center gap-1">
-            <button aria-label="打开设置" className={`flex h-10 w-10 items-center justify-center rounded-full ${active === 'settings' ? 'text-brand' : 'text-slate-500 hover:bg-slate-100'}`} onClick={onOpenSettings} type="button"><Settings size={19} /></button>
-            {active === 'settings' ? <button aria-label="退出登录" className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-danger" onClick={onLogout} type="button"><LogOut size={19} /></button> : null}
+            {active !== 'settings' ? (
+              <button aria-label="打开设置" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100" onClick={onOpenSettings} type="button"><Settings size={19} /></button>
+            ) : (
+              <button aria-label="退出登录" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-danger" onClick={onLogout} type="button"><LogOut size={19} /></button>
+            )}
           </div>
         </div>
       </header>
