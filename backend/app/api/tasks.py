@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from sqlite3 import Connection
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 
-from app.contracts import DashboardOut, TaskHistoryItem, TaskOut
+from app.contracts import DashboardOut, TaskHistoryItem, TaskPageOut
 from app.dependencies import get_connection, require_user
 from app.errors import NotFoundError
 from app.repositories.catalog import CatalogRepository
@@ -17,13 +18,28 @@ from app.services.task_retry import TaskRetryDependencies, TaskRetryService
 
 router = APIRouter(prefix="/api", tags=["tasks"], dependencies=[Depends(require_user)])
 
+TaskFilterValue = Literal[
+    "all",
+    "attention",
+    "submitted",
+    "downloading",
+    "organizing",
+    "completed",
+    "submit_failed",
+    "download_failed",
+    "organize_failed",
+    "incomplete_submit",
+]
 
-@router.get("/tasks", response_model=list[TaskOut])
+
+@router.get("/tasks", response_model=TaskPageOut)
 def list_tasks(
-    limit: int = Query(default=50, ge=1, le=200),
+    task_filter: TaskFilterValue = Query(default="all", alias="filter"),
+    limit: int = Query(default=24, ge=1, le=200),
+    before_id: int | None = Query(default=None, ge=1),
     connection: Connection = Depends(get_connection),
-) -> list[dict[str, object]]:
-    return TasksRepository(connection).list_all(limit)
+) -> dict[str, object]:
+    return TasksRepository(connection).list_page(task_filter, limit, before_id)
 
 
 @router.get("/tasks/by-work/{code}", response_model=list[TaskHistoryItem])

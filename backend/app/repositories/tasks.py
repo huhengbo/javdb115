@@ -12,6 +12,59 @@ INCOMPLETE_SUBMISSION_STATUS = "pending"
 INCOMPLETE_SUBMISSION_STAGE = "created"
 ORGANIZING_STATUS = "organizing"
 ORGANIZING_STAGE = "115_organizing"
+TASK_FILTER_VALUES = (
+    "all",
+    "attention",
+    "submitted",
+    "downloading",
+    "organizing",
+    "completed",
+    "submit_failed",
+    "download_failed",
+    "organize_failed",
+    "incomplete_submit",
+)
+_ERROR_TEXT_SQL = "LOWER(COALESCE(t.error_message, ''))"
+_MISSING_VIDEO_SQL = (
+    f"({_ERROR_TEXT_SQL} LIKE '%no video%' OR {_ERROR_TEXT_SQL} LIKE '%视频%')"
+)
+_DIRECTORY_ERROR_SQL = (
+    f"({_ERROR_TEXT_SQL} LIKE '%folder%' OR {_ERROR_TEXT_SQL} LIKE '%directory%' "
+    f"OR {_ERROR_TEXT_SQL} LIKE '%目录%')"
+)
+_CLASSIFIED_FAILED_SQL = (
+    "(t.status = 'failed' AND t.stage NOT IN "
+    "('115_submit_incomplete', 'follow_check_failed', 'javdb_movie_failed'))"
+)
+
+
+def task_filter_sql(task_filter: str) -> str:
+    if task_filter == "all":
+        return "1 = 1"
+    if task_filter == "attention":
+        return "t.status IN ('failed', 'organizing')"
+    if task_filter in {"submitted", "downloading", "organizing", "completed"}:
+        return f"t.status = '{task_filter}'"
+    if task_filter == "submit_failed":
+        return (
+            f"{_CLASSIFIED_FAILED_SQL} AND NOT {_MISSING_VIDEO_SQL} "
+            f"AND NOT {_DIRECTORY_ERROR_SQL} AND t.stage = '115_submit_failed'"
+        )
+    if task_filter == "download_failed":
+        return (
+            f"{_CLASSIFIED_FAILED_SQL} AND NOT {_MISSING_VIDEO_SQL} "
+            f"AND NOT {_DIRECTORY_ERROR_SQL} "
+            "AND t.stage IN ('115_download_failed', '115_task_missing')"
+        )
+    if task_filter == "organize_failed":
+        return (
+            f"{_CLASSIFIED_FAILED_SQL} AND "
+            f"({_MISSING_VIDEO_SQL} OR {_DIRECTORY_ERROR_SQL} "
+            "OR t.stage = '115_organize_failed')"
+        )
+    if task_filter == "incomplete_submit":
+        return "t.stage = '115_submit_incomplete'"
+    raise ValueError(f"Unknown task filter: {task_filter}")
 
 
 class TasksRepository:
@@ -20,6 +73,34 @@ class TasksRepository:
 
     def list_all(self, limit: int = 50) -> list[dict[str, Any]]:
         return self._list_tasks("", (), limit)
+
+    def list_page(
+        self,
+        task_filter: str,
+        limit: int = 24,
+        before_id: int | None = None,
+    ) -> dict[str, Any]:
+        where_parts = [task_filter_sql(task_filter)]
+        params: list[object] = []
+        if before_id is not None:
+            where_parts.append("t.id < ?")
+            params.append(before_id)
+
+        page = self._list_tasks(
+            "WHERE " + " AND ".join(where_parts),
+            tuple(params),
+            limit + 1,
+        )
+        has_more = len(page) > limit
+        items = page[:limit]
+        counts = self.filter_counts()
+        return {
+            "items": items,
+            "has_more": has_more,
+            "next_cursor": int(items[-1]["id"]) if has_more and items else None,
+            "total": counts[task_filter],
+            "counts": counts,
+        }
 
     def list_by_work_code(self, code: str) -> list[dict[str, Any]]:
         return self._list_tasks("WHERE w.code = ?", (code,), None)
@@ -90,7 +171,7 @@ class TasksRepository:
             """
             + where_sql
             + f"""
-            ORDER BY t.created_at DESC {limit_sql}
+            ORDER BY t.id DESC {limit_sql}
             """,
             query_params,
         ).fetchall()
@@ -101,6 +182,14 @@ class TasksRepository:
             "SELECT status, COUNT(*) AS count FROM tasks GROUP BY status"
         ).fetchall()
         return {str(row["status"]): int(row["count"]) for row in rows}
+
+    def filter_counts(self) -> dict[str, int]:
+        select_sql = ", ".join(
+            f'SUM(CASE WHEN {task_filter_sql(value)} THEN 1 ELSE 0 END) AS "{value}"'
+            for value in TASK_FILTER_VALUES
+        )
+        row = self.connection.execute(f"SELECT {select_sql} FROM tasks t").fetchone()
+        return {value: int(row[value] or 0) for value in TASK_FILTER_VALUES}
 
     def stage_counts(self) -> dict[str, int]:
         rows = self.connection.execute(

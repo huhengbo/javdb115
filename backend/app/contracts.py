@@ -63,6 +63,14 @@ class TaskOut(BaseModel):
     magnet: MagnetOut | None = None
 
 
+class TaskPageOut(BaseModel):
+    items: list[TaskOut]
+    has_more: bool
+    next_cursor: int | None = None
+    total: int
+    counts: dict[str, int] = Field(default_factory=dict)
+
+
 class TaskEventOut(BaseModel):
     id: int
     task_id: int
