@@ -117,7 +117,7 @@ docker compose logs -f
 | --- | --- | --- | --- |
 | `APP_ADMIN_USERNAME` | 否 | `admin` | Web 管理员用户名 |
 | `APP_ADMIN_PASSWORD` | 是 | - | Web 管理员密码 |
-| `APP_SECRET_KEY` | 是 | - | Session Token 哈希与安全相关密钥；生产环境请使用长随机值 |
+| `APP_SECRET_KEY` | 是 | - | Session 安全与敏感设置加密密钥；首次使用后必须保持稳定，生产环境请使用长随机值 |
 | `APP_DATABASE_PATH` | 否 | `data/app.sqlite3` | SQLite 数据库路径；Docker 中固定为 `/data/app.sqlite3` |
 | `APP_SESSION_TTL_HOURS` | 否 | `24` | 登录有效期（小时） |
 | `APP_SESSION_COOKIE_SECURE` | 否 | `false` | 使用 HTTPS 时建议设为 `true`，使 Session Cookie 只通过 HTTPS 发送 |
@@ -133,7 +133,10 @@ docker compose logs -f
 - 磁力筛选规则。
 - Telegram Bot Token 与 Chat ID。
 
-115 Cookie 和 Telegram Bot Token 属于敏感设置。API 不会回显原值；Web 表单留空保存表示保持原值，只有重新输入时才会覆盖。
+115 Cookie 和 Telegram Bot Token 属于敏感设置。API 不会回显原值；Web 表单留空保存表示保持原值，只有重新输入时才会覆盖。敏感值会使用由 `APP_SECRET_KEY` 派生的密钥通过 AES-GCM 认证加密后保存到 SQLite；升级旧数据库时会在启动阶段自动把已知明文敏感值迁移为密文。
+
+> [!IMPORTANT]
+> 请把 `APP_SECRET_KEY` 与数据库备份作为同一套恢复材料长期保存。更换或丢失该密钥后，历史加密的 115 Cookie / Telegram Bot Token 将无法解密，需要重新录入。
 
 ## 从旧容器升级
 
@@ -170,7 +173,7 @@ python -m app.db_admin restore \
   --yes
 ```
 
-Docker 部署也可以在停止容器后备份整个 `./data` 目录。
+Docker 部署也可以在停止容器后备份整个 `./data` 目录。恢复包含敏感设置的数据库时，还必须同时使用原来的 `APP_SECRET_KEY`。
 
 ## 本地开发
 
@@ -209,6 +212,7 @@ javdb115/
 │   │   ├── repositories/    # SQLite 数据访问
 │   │   ├── services/        # 核心业务流程
 │   │   ├── migrations.py    # SQLite 顺序迁移
+│   │   ├── secret_store.py  # 敏感设置 AES-GCM 加解密
 │   │   ├── db_admin.py      # 备份 / 恢复 CLI
 │   │   └── schema.sql       # 最新 SQLite 表结构
 │   ├── tests/               # 后端测试
@@ -273,10 +277,11 @@ GitHub Actions 对 PR / `master` 自动执行：
 - 登录连续失败会触发临时限流/锁定。
 - 115 Cookie 和 Telegram Bot Token 不通过设置 API 回显。
 - 敏感键由服务端固定 allowlist 判定，不信任前端传入的 `is_secret`。
+- 115 Cookie 与 Telegram Bot Token 在 SQLite 中使用 AES-GCM 认证加密保存。
 - Docker 运行进程为非 root，并启用 `no-new-privileges`。
 
 > [!WARNING]
-> 当前 SQLite 数据库本身不是应用层加密数据库。115 Cookie、Telegram Token 等运行时凭据虽然不会通过 API 回显，但仍可能存在于数据库文件中。请限制 `data/` 和备份文件权限，不要把数据库同步到不可信位置，并妥善保护 `APP_SECRET_KEY`。
+> 应用层加密降低了 SQLite 或备份文件被单独读取时的凭据暴露风险，但 `APP_SECRET_KEY` 与数据库同时泄露时无法提供同等保护。请限制 `data/`、备份文件和运行环境配置的访问权限，不要把这些材料同步到不可信位置。
 
 如果发现安全问题，请不要直接提交包含利用细节、Cookie、Token 或其他敏感信息的公开 Issue。处理方式见 [SECURITY.md](SECURITY.md)。
 
