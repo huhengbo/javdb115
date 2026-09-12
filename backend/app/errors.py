@@ -38,6 +38,11 @@ class AuthError(AppError):
         super().__init__(401, "auth_error", message)
 
 
+class RateLimitError(AppError):
+    def __init__(self, message: str = "Too many login attempts. Try again later.") -> None:
+        super().__init__(429, "rate_limited", message)
+
+
 async def app_error_handler(_: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, AppError):
         raise exc
