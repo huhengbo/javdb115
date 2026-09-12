@@ -15,11 +15,11 @@ type Props = {
 };
 
 const tabs = [
-  { id: 'dashboard' as const, label: '首页', title: '运行中心', icon: Home },
-  { id: 'discovery' as const, label: '发现', title: '发现', icon: Compass },
-  { id: 'rankings' as const, label: '排行', title: '排行', icon: Trophy },
-  { id: 'following' as const, label: '关注', title: '关注', icon: Heart },
-  { id: 'tasks' as const, label: '任务', title: '任务', icon: Activity },
+  { id: 'dashboard' as const, label: '首页', icon: Home },
+  { id: 'discovery' as const, label: '发现', icon: Compass },
+  { id: 'rankings' as const, label: '排行', icon: Trophy },
+  { id: 'following' as const, label: '关注', icon: Heart },
+  { id: 'tasks' as const, label: '任务', icon: Activity },
 ];
 
 const pageTitles: Record<Tab, string> = {
@@ -37,11 +37,11 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
 
   return (
     <div className={`min-h-dvh bg-mist ${keyboardVisible ? 'pb-0' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom))]'}`}>
-      <header className="sticky top-0 z-40 border-b border-line/70 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-line bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <div className="min-w-0">
             <p className="truncate text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">JAVDB 115</p>
-            <p className="truncate text-base font-semibold leading-5 text-ink">{pageTitles[active]}</p>
+            <h1 className="truncate text-base font-semibold leading-5 text-ink">{pageTitles[active]}</h1>
           </div>
           <div className="flex items-center gap-1">
             <button aria-label="打开设置" className={`flex h-11 w-11 items-center justify-center rounded-full ${active === 'settings' ? 'bg-teal-50 text-brand' : 'text-slate-500 hover:bg-slate-100'}`} onClick={onOpenSettings} type="button"><Settings size={19} /></button>
@@ -55,7 +55,7 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
         {children}
       </main>
       {!keyboardVisible ? (
-        <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-50 border-t border-line/70 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
+        <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-50 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
           <div className="mx-auto grid h-[4.5rem] max-w-3xl grid-cols-5 gap-1 px-2 py-1.5">
             {tabs.map((tab) => {
               const Icon = tab.icon;
