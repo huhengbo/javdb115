@@ -15,8 +15,9 @@ import type {
   P115QrStatus,
   RankingActor,
   SettingItem,
-  Task,
+  TaskFilterValue,
   TaskHistoryItem,
+  TaskPage,
   TelegramTestResult
 } from './types';
 
@@ -60,7 +61,11 @@ export function logout(): Promise<{ ok: boolean }> {
 export const client = {
   dashboard: () => api<Dashboard>('/api/dashboard'),
   runCheck: () => api<{ ok: boolean }>('/api/checks/run', { method: 'POST' }),
-  tasks: () => api<Task[]>('/api/tasks'),
+  tasks: (filter: TaskFilterValue = 'all', beforeId: number | null = null, limit = 24) => {
+    const params = new URLSearchParams({ filter, limit: String(limit) });
+    if (beforeId !== null) params.set('before_id', String(beforeId));
+    return api<TaskPage>(`/api/tasks?${params.toString()}`);
+  },
   retryTask: (id: number) => api<{ ok: boolean }>(`/api/tasks/${id}/retry`, { method: 'POST' }),
   deleteTask: (id: number) => api<{ ok: boolean }>(`/api/tasks/${id}`, { method: 'DELETE' }),
   taskHistory: (code: string) => api<TaskHistoryItem[]>(`/api/tasks/by-work/${encodeURIComponent(code)}`),
