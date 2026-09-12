@@ -32,13 +32,18 @@ export function DiscoveryPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const latestSeq = useRef(0);
   const searchSeq = useRef(0);
-  const { selectedMovie, selectedActor, activeOverlayKind, openMovie, closeMovie, openActor, closeActor } = useDetailHistory('discovery');
+  const { selectedMovie, selectedActor, activeOverlayKind, openMovie, closeMovie, openActor, closeActor } =
+    useDetailHistory('discovery');
 
-  const followByActorId = useMemo(() => Object.fromEntries(follows.map((follow) => [follow.actor_external_id, follow])), [follows]);
+  const followByActorId = useMemo(
+    () => Object.fromEntries(follows.map((follow) => [follow.actor_external_id, follow])),
+    [follows]
+  );
 
   const loadMovies = useCallback(async (nextFilter: string, nextPage: number, append: boolean) => {
     const seq = ++latestSeq.current;
-    if (append) setLoadingMore(true); else setLoading(true);
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     setError(null);
     try {
       const result = await client.moviesLatest(nextFilter, nextPage, PAGE_SIZE);
@@ -63,7 +68,11 @@ export function DiscoveryPage() {
   }, []);
 
   async function loadFollows() {
-    try { setFollows(await client.follows()); } catch { setFollows([]); }
+    try {
+      setFollows(await client.follows());
+    } catch {
+      setFollows([]);
+    }
   }
 
   useEffect(() => {
@@ -78,10 +87,13 @@ export function DiscoveryPage() {
   useEffect(() => {
     const element = loaderRef.current;
     if (!element) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting || !hasMore || loading || loadingMore || searchResults || failedPage) return;
-      void loadMovies(filter, page + 1, true);
-    }, { rootMargin: '320px 0px', threshold: 0.01 });
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting || !hasMore || loading || loadingMore || searchResults || failedPage) return;
+        void loadMovies(filter, page + 1, true);
+      },
+      { rootMargin: '320px 0px', threshold: 0.01 }
+    );
     observer.observe(element);
     return () => observer.disconnect();
   }, [failedPage, filter, hasMore, loadMovies, loading, loadingMore, page, searchResults]);
@@ -133,12 +145,12 @@ export function DiscoveryPage() {
 
       {error ? <InlineAlert className="mt-3" tone="danger">{error}</InlineAlert> : null}
       <div className="mt-4">
-        <SectionHeader title={searchResults ? `搜索结果 · ${searchResults.length}` : '最新作品'} trailing={searchResults ? <button className="min-h-10 px-1 text-sm font-medium text-brand" onClick={clearSearch} type="button">返回最新</button> : undefined} />
+        <SectionHeader title={searchResults ? `搜索结果 · ${searchResults.length}` : '最新作品'} trailing={searchResults ? <button className="min-h-11 px-1 text-sm font-medium text-brand" onClick={clearSearch} type="button">返回最新</button> : undefined} />
         {loading ? <MovieGridSkeleton /> : (
           <>
             <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3">{(searchResults ?? movies).map((movie) => <MovieCard key={movie.id} movie={movie} onClick={() => openMovie(movie.id)} />)}</div>
             {(searchResults ?? movies).length === 0 ? <div className="mt-4"><EmptyState title={searchResults ? '没有找到匹配作品' : '暂无最新作品'} /></div> : null}
-            {!searchResults ? <div className="mt-4 flex min-h-14 items-center justify-center" ref={loaderRef}>{loadingMore ? <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} />加载中</span> : failedPage ? <button className="min-h-10 px-3 text-sm font-medium text-brand" onClick={() => void loadMovies(filter, failedPage, true)} type="button">加载失败，重试</button> : hasMore ? <span className="py-3 text-xs text-slate-400">继续上滑</span> : <span className="py-3 text-xs text-slate-400">已加载全部</span>}</div> : null}
+            {!searchResults ? <div className="mt-4 flex min-h-14 items-center justify-center" ref={loaderRef}>{loadingMore ? <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} />加载中</span> : failedPage ? <button className="min-h-11 px-3 text-sm font-medium text-brand" onClick={() => void loadMovies(filter, failedPage, true)} type="button">加载失败，重试</button> : hasMore ? <span className="py-3 text-xs text-slate-400">继续上滑</span> : <span className="py-3 text-xs text-slate-400">已加载全部</span>}</div> : null}
           </>
         )}
       </div>
