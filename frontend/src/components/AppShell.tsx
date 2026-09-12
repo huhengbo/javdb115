@@ -2,6 +2,7 @@ import { Activity, Compass, Heart, Home, LogOut, Settings, Trophy } from 'lucide
 import { useEffect, useState, type ReactNode } from 'react';
 import { PwaInstallPanel } from './PwaInstallPanel';
 import { PwaUpdatePrompt } from './PwaUpdatePrompt';
+import { ThemePicker } from './ThemePicker';
 
 type Tab = 'dashboard' | 'discovery' | 'rankings' | 'following' | 'tasks' | 'settings';
 
@@ -32,9 +33,7 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
           <div className="flex items-center gap-1">
             <button
               aria-label="打开设置"
-              className={`flex h-10 w-10 items-center justify-center rounded-md ${
-                active === 'settings' ? 'bg-teal-50 text-brand' : 'text-slate-500'
-              }`}
+              className={`flex h-11 w-11 items-center justify-center rounded-md ${active === 'settings' ? 'bg-teal-50 text-brand' : 'text-slate-500'}`}
               onClick={onOpenSettings}
               type="button"
             >
@@ -42,7 +41,7 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
             </button>
             <button
               aria-label="退出登录"
-              className="flex h-10 w-10 items-center justify-center rounded-md text-slate-500 hover:text-danger"
+              className="flex h-11 w-11 items-center justify-center rounded-md text-slate-500 hover:text-danger"
               onClick={onLogout}
               type="button"
             >
@@ -57,13 +56,10 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
         </p>
       ) : null}
       <main className="mx-auto w-full max-w-3xl px-4 py-4">
-        {active === 'settings' ? <PwaInstallPanel /> : null}
+        {active === 'settings' ? <><PwaInstallPanel /><ThemePicker /></> : null}
         {children}
       </main>
-      <nav
-        aria-label="主导航"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
-      >
+      <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
         <div className="mx-auto grid h-16 max-w-3xl grid-cols-5">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -72,9 +68,7 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
               <button
                 aria-current={selected ? 'page' : undefined}
                 key={tab.id}
-                className={`flex min-h-12 flex-col items-center justify-center gap-1 text-xs ${
-                  selected ? 'text-brand' : 'text-slate-500'
-                }`}
+                className={`flex min-h-12 flex-col items-center justify-center gap-1 text-xs ${selected ? 'text-brand' : 'text-slate-500'}`}
                 onClick={() => onChange(tab.id)}
                 type="button"
               >
