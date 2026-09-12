@@ -17,8 +17,8 @@ class AppConfig:
     admin_password: str
     secret_key: str
     session_ttl_hours: int
-    session_cookie_name: str
-    session_cookie_secure: bool
+    session_cookie_name: str = DEFAULT_SESSION_COOKIE_NAME
+    session_cookie_secure: bool = False
 
 
 def require_env(name: str) -> str:
