@@ -4,8 +4,12 @@ import sqlite3
 
 from app.security import iso_now
 
-SECRET_KEYS = {"telegram_bot_token"}
+SECRET_KEYS = frozenset({"p115_cookie", "telegram_bot_token"})
 OBSOLETE_KEYS = {"javdb_base_url", "javdb_cookie"}
+
+
+def is_secret_key(key: str) -> bool:
+    return key in SECRET_KEYS
 
 
 class SettingsRepository:
@@ -35,7 +39,8 @@ class SettingsRepository:
         raise ValueError(f"Missing required setting: {key}")
 
     def upsert(self, key: str, value: str, is_secret: bool | None = None) -> None:
-        secret_flag = int(is_secret if is_secret is not None else key in SECRET_KEYS)
+        del is_secret
+        secret_flag = int(is_secret_key(key))
         self.connection.execute(
             """
             INSERT INTO settings (key, value, is_secret, updated_at)
