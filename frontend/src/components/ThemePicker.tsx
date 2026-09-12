@@ -36,7 +36,7 @@ export function ThemePicker() {
         <h2 className="text-sm font-semibold text-ink">外观主题</h2>
         <p className="mt-1 text-xs text-slate-500">只保存在当前设备，不包含账号或敏感数据。</p>
       </div>
-      <button aria-expanded={expanded} className="mt-3 flex min-h-14 w-full items-center gap-3 rounded-xl bg-slate-50 px-3 text-left" onClick={() => setExpanded((current) => !current)} type="button">
+      <button aria-label="选择外观主题" aria-expanded={expanded} className="mt-3 flex min-h-14 w-full items-center gap-3 rounded-xl bg-slate-50 px-3 text-left" onClick={() => setExpanded((current) => !current)} type="button">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand shadow-sm">{selected.icon}</span>
         <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-ink">{selected.label}</span><span className="block truncate text-xs text-slate-500">{selected.caption}</span></span>
         <ChevronDown className={`shrink-0 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} size={18} />
