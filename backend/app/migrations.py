@@ -26,7 +26,9 @@ def apply_migrations(connection: sqlite3.Connection) -> None:
 
 def current_schema_version(connection: sqlite3.Connection) -> int:
     _ensure_migrations_table(connection)
-    row = connection.execute("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations").fetchone()
+    row = connection.execute(
+        "SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations"
+    ).fetchone()
     return 0 if row is None else int(row["version"])
 
 
@@ -133,7 +135,8 @@ def _ensure_follow_seen_table(connection: sqlite3.Connection) -> None:
         """
     )
     connection.execute(
-        "CREATE INDEX IF NOT EXISTS idx_follow_seen_movies_follow_id ON follow_seen_movies(follow_id)"
+        "CREATE INDEX IF NOT EXISTS idx_follow_seen_movies_follow_id "
+        "ON follow_seen_movies(follow_id)"
     )
 
 
