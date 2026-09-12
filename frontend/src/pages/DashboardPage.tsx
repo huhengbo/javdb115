@@ -4,7 +4,6 @@ import {
   ChevronRight,
   Cloud,
   Globe2,
-  Loader2,
   RefreshCw,
   Settings,
   XCircle
