@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { currentUser, logout as logoutRequest } from './api';
 import { AppShell } from './components/AppShell';
 import { MovieDetailNavigator } from './components/discovery/MovieDetailNavigator';
+import { APP_TAB_CHANGE_EVENT } from './lib/useDetailHistory';
 import { DashboardPage } from './pages/DashboardPage';
 import { DiscoveryPage } from './pages/DiscoveryPage';
 import { FollowingPage } from './pages/FollowingPage';
@@ -44,6 +45,7 @@ export default function App() {
     if (tab === 'settings' && settingsDirty && !window.confirm('设置尚未保存，确认离开并保留当前草稿吗？')) {
       return false;
     }
+    window.dispatchEvent(new Event(APP_TAB_CHANGE_EVENT));
     scrollPositions.current[tab] = window.scrollY;
     setVisitedTabs((current) => new Set(current).add(nextTab));
     setTab(nextTab);
