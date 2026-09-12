@@ -63,27 +63,33 @@ test('directory picker uses enter-then-confirm mobile flow', async ({ page }) =>
   await expect(downloadDirectory).toContainText('根目录 / 电影');
 });
 
-test('theme selection persists and all supported widths avoid horizontal overflow', async ({ page }, testInfo) => {
-  const themes = ['harbor', 'graphite', 'paper', 'blueprint'] as const;
+test('appearance modes persist, follow system, and avoid horizontal overflow', async ({ page }, testInfo) => {
+  const modes = [
+    { label: '白天', preference: 'light', resolved: 'harbor' },
+    { label: '夜间', preference: 'dark', resolved: 'graphite' }
+  ] as const;
   const widths = [320, 390, 430, 1440];
 
   await page.goto('/settings');
-  for (const theme of themes) {
-    await page.getByRole('button', { name: '选择外观主题' }).click();
-    await page.getByRole('button', { name: themeLabel(theme), exact: true }).click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+  for (const mode of modes) {
+    await page.getByRole('button', { name: new RegExp(mode.label) }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme-preference', mode.preference);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', mode.resolved);
     for (const width of widths) {
       await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow).toBeLessThanOrEqual(0);
-      if (width === 390) {
-        await page.screenshot({ path: testInfo.outputPath(`${theme}-${width}.png`), fullPage: true });
-      }
+      if (width === 390) await page.screenshot({ path: testInfo.outputPath(`${mode.preference}-${width}.png`), fullPage: true });
     }
   }
 
-  await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'blueprint');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.getByRole('button', { name: /自动/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'system');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'graphite');
+
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'harbor');
 });
 
 test('reduced motion and PWA manifest contracts are active in the real browser build', async ({ page, request }) => {
@@ -171,10 +177,6 @@ function movie(id: string, number: string, title: string) {
     magnets_count: 1,
     preview_images: []
   };
-}
-
-function themeLabel(theme: 'harbor' | 'graphite' | 'paper' | 'blueprint') {
-  return { harbor: '海盐青', graphite: '石墨夜', paper: '暖纸', blueprint: '高对比蓝图' }[theme];
 }
 
 async function json(route: Route, body: unknown) {
