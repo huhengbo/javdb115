@@ -47,8 +47,13 @@ def test_legacy_database_is_upgraded_and_versioned(tmp_path: Path) -> None:
     database.initialize()
 
     with database.connect() as connection:
-        task_columns = {str(row["name"]) for row in connection.execute("PRAGMA table_info(tasks)")}
-        follow_columns = {str(row["name"]) for row in connection.execute("PRAGMA table_info(follows)")}
+        task_columns = {
+            str(row["name"]) for row in connection.execute("PRAGMA table_info(tasks)")
+        }
+        follow_columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(follows)")
+        }
         secret = connection.execute(
             "SELECT is_secret FROM settings WHERE key = 'p115_cookie'"
         ).fetchone()
