@@ -24,35 +24,41 @@ export function RankingsPage() {
   const [follows, setFollows] = useState<Follow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const requestSeq = useRef(0);
   const followByActorId = useMemo(() => Object.fromEntries(follows.map((follow) => [follow.actor_external_id, follow])), [follows]);
   const { selectedMovie, selectedActor, activeOverlayKind, openMovie, closeMovie, openActor, closeActor } =
     useDetailHistory('rankings');
+
   const loadRankings = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     setError(null);
     try {
       if (mode === 'movies') {
-        setMovies([]);
-        window.scrollTo({ top: 0 });
-        setMovies(await client.rankingsPlayback(moviePeriod));
+        const result = await client.rankingsPlayback(moviePeriod);
+        if (seq !== requestSeq.current) return;
+        setMovies(result);
       } else {
-        setActors([]);
-        window.scrollTo({ top: 0 });
-        setActors(await client.rankingsActors());
+        const result = await client.rankingsActors();
+        if (seq !== requestSeq.current) return;
+        setActors(result);
       }
+      window.scrollTo({ top: 0 });
     } catch (err) {
-      setError((err as Error).message);
+      if (seq === requestSeq.current) setError((err as Error).message);
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }, [mode, moviePeriod]);
+
   useEffect(() => void loadRankings(), [loadRankings]);
   useEffect(() => void loadFollows(setFollows), []);
+
   return (
     <section>
       <RankingsHeader mode={mode} onModeChange={setMode} />
       <RankingsFilters mode={mode} moviePeriod={moviePeriod} onMoviePeriodChange={setMoviePeriod} />
-      {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger">{error}</p> : null}
+      {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger" role="alert">{error}</p> : null}
       {loading ? <LoadingState /> : null}
       {!loading && mode === 'movies' ? <MovieRankingList movies={movies} onOpen={openMovie} /> : null}
       {!loading && mode === 'actors' ? <ActorRankingList actors={actors} onOpen={openActor} /> : null}
@@ -112,7 +118,7 @@ function RankingsFilters(props: {
 
 function LoadingState() {
   return (
-    <p className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+    <p className="mt-4 flex items-center gap-2 text-sm text-slate-500" aria-live="polite">
       <Loader2 className="animate-spin" size={16} />
       加载中...
     </p>
@@ -158,9 +164,10 @@ function PreviewCarousel(props: { readonly images: PreviewImage[] | undefined })
   return (
     <div className="min-w-0 flex-1">
       <div className="relative h-36 overflow-hidden rounded bg-slate-100" {...swipe}>
-        <img alt="" className="h-full w-full object-contain" loading="lazy" src={imgUrl(images[index].large_url || images[index].thumb_url)} />
+        <img alt={`预览图 ${index + 1}/${images.length}`} className="h-full w-full object-contain" decoding="async" loading="lazy" src={imgUrl(images[index].thumb_url || images[index].large_url)} />
         <PreviewButton direction="previous" disabled={index === 0} onClick={() => setIndex(index - 1)} />
         <PreviewButton direction="next" disabled={index >= images.length - 1} onClick={() => setIndex(index + 1)} />
+        <span className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-1 text-[11px] text-white">{index + 1}/{images.length}</span>
       </div>
     </div>
   );
@@ -208,8 +215,8 @@ function ActorRankingCard(props: { readonly actor: RankingActor; readonly index:
   const name = rankingActorName(props.actor);
   return (
     <button className="flex min-h-16 w-full items-center gap-3 rounded-lg border border-line bg-white p-3 text-left" onClick={props.onOpen} type="button">
-      <RankBadge index={props.index} />
-      {props.actor.avatar_url ? <img alt={name} className="h-12 w-12 rounded-lg object-cover" src={imgUrl(props.actor.avatar_url)} /> : <span className="h-12 w-12 rounded-lg bg-slate-100" />}
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">{props.index + 1}</span>
+      {props.actor.avatar_url ? <img alt={name} className="h-12 w-12 shrink-0 rounded-lg object-cover" decoding="async" loading="lazy" src={imgUrl(props.actor.avatar_url)} /> : <span className="h-12 w-12 shrink-0 rounded-lg bg-slate-100" />}
       <span className="min-w-0">
         <span className="block truncate text-sm font-semibold text-ink">{name}</span>
         <span className="mt-1 block truncate text-xs text-slate-500">{props.actor.name}</span>
