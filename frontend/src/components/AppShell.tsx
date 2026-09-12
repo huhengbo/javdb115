@@ -1,5 +1,7 @@
 import { Activity, Compass, Heart, Home, LogOut, Settings, Trophy } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
+import { JAVDB_AUTH_REQUIRED_EVENT } from '../api';
+import { JavdbLoginPanel } from './JavdbLoginPanel';
 import { PwaInstallPanel } from './PwaInstallPanel';
 import { PwaUpdatePrompt } from './PwaUpdatePrompt';
 import { ThemePicker } from './ThemePicker';
@@ -8,11 +10,16 @@ type Tab = 'dashboard' | 'discovery' | 'rankings' | 'following' | 'tasks' | 'set
 
 type Props = {
   active: Tab;
+  javdbLoginRequestId: number;
   onChange: (tab: Tab) => void;
+  onJavdbAuthChanged: (authenticated: boolean) => void;
   onLogout: () => void;
+  onOpenJavdbLogin: () => void;
   onOpenSettings: () => void;
   children: ReactNode;
 };
+
+type JavdbAuthNotice = { feature: string };
 
 const tabs = [
   { id: 'dashboard' as const, label: '首页', icon: Home },
@@ -31,9 +38,24 @@ const pageTitles: Record<Tab, string> = {
   settings: '设置'
 };
 
-export function AppShell({ active, onChange, onLogout, onOpenSettings, children }: Props) {
+export function AppShell({ active, javdbLoginRequestId, onChange, onJavdbAuthChanged, onLogout, onOpenJavdbLogin, onOpenSettings, children }: Props) {
   const online = useOnlineStatus();
   const keyboardVisible = useKeyboardVisible();
+  const [javdbNotice, setJavdbNotice] = useState<JavdbAuthNotice | null>(null);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ feature?: string }>).detail;
+      setJavdbNotice({ feature: detail?.feature?.trim() || '此功能' });
+    };
+    window.addEventListener(JAVDB_AUTH_REQUIRED_EVENT, handler);
+    return () => window.removeEventListener(JAVDB_AUTH_REQUIRED_EVENT, handler);
+  }, []);
+
+  function handleJavdbAuthChanged(authenticated: boolean) {
+    if (authenticated) setJavdbNotice(null);
+    onJavdbAuthChanged(authenticated);
+  }
 
   return (
     <div className={`min-h-dvh bg-mist ${keyboardVisible ? 'pb-0' : 'pb-[calc(4rem+env(safe-area-inset-bottom))]'}`}>
@@ -51,7 +73,19 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
       </header>
       {!online ? <p className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-30 bg-amber-50 px-4 py-2 text-center text-xs text-amber-800" role="status">当前离线，部分操作暂不可用。</p> : null}
       <main className="app-page mx-auto w-full max-w-3xl px-4 py-4 sm:py-5">
-        {active === 'settings' ? <div className="mb-5 space-y-5"><ThemePicker /><PwaInstallPanel /></div> : null}
+        {javdbNotice && active !== 'settings' ? (
+          <div className="mb-3 flex min-h-12 items-center justify-between gap-3 border-y border-line py-2" role="status">
+            <p className="text-sm text-slate-600">{javdbNotice.feature}需要登录 JavDB</p>
+            <button className="min-h-11 shrink-0 px-2 text-sm font-medium text-brand" onClick={onOpenJavdbLogin} type="button">去登录</button>
+          </div>
+        ) : null}
+        {active === 'settings' ? (
+          <div className="mb-5 space-y-5">
+            <JavdbLoginPanel focusRequestId={javdbLoginRequestId} onAuthChanged={handleJavdbAuthChanged} />
+            <ThemePicker />
+            <PwaInstallPanel />
+          </div>
+        ) : null}
         {children}
       </main>
       {!keyboardVisible ? (

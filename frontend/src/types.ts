@@ -120,10 +120,32 @@ export type P115Status = {
   account: P115Account | null;
 };
 
+export type JavdbAccount = {
+  user_id: string | null;
+  username: string | null;
+  email: string | null;
+  is_vip: boolean | null;
+  vip_expired_at: string | null;
+};
+
+export type JavdbLoginStatus = {
+  configured: boolean;
+  ok: boolean;
+  message: string;
+  account: JavdbAccount | null;
+};
+
+export type JavdbLoginResult = {
+  ok: boolean;
+  account: JavdbAccount | null;
+};
+
 export type JavdbStatus = {
+  configured: boolean;
   ok: boolean;
   message: string;
   checked_at: string;
+  account: JavdbAccount | null;
 };
 
 export type ConnectionStatus = {

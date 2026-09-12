@@ -3,11 +3,14 @@ import { URL } from 'node:url';
 
 const latestMovie = movie('latest-1', 'ABC-001', '最新作品');
 const staleSearchMovie = movie('stale-1', 'OLD-999', '旧搜索结果');
+const topMovie = movie('top-1', 'TOP-001', 'TOP250 作品');
 
 let savedSettings: Array<{ key: string; value: string; is_secret: boolean }> = [];
+let javdbLoggedIn = false;
 
 test.beforeEach(async ({ page }) => {
   savedSettings = [];
+  javdbLoggedIn = false;
   await mockApi(page);
 });
 
@@ -61,6 +64,24 @@ test('directory picker uses enter-then-confirm mobile flow', async ({ page }) =>
   await expect(dialog).toContainText('根目录 / 电影');
   await page.getByRole('button', { name: '选择当前目录' }).click();
   await expect(downloadDirectory).toContainText('根目录 / 电影');
+});
+
+test('TOP250 guides JavDB login in settings and returns to the protected view', async ({ page }) => {
+  await page.goto('/rankings');
+  await page.getByRole('button', { name: 'TOP250' }).click();
+
+  await expect(page.getByText('TOP250需要登录 JavDB')).toBeVisible();
+  await page.getByRole('button', { name: '去登录' }).click();
+
+  await expect(page.getByRole('heading', { name: '设置' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'JavDB 账号' })).toBeVisible();
+  await page.getByLabel('用户名').fill('javdb-user');
+  await page.getByLabel('密码').fill('secret');
+  await page.getByRole('button', { name: '登录 JavDB' }).click();
+
+  await expect(page.getByRole('heading', { name: '排行' })).toBeVisible();
+  await expect(page.getByText('TOP-001')).toBeVisible();
+  await expect(page).toHaveURL(/\/rankings\?.*board=top250/);
 });
 
 test('appearance modes persist, follow system, and avoid horizontal overflow', async ({ page }, testInfo) => {
@@ -123,9 +144,27 @@ async function handleApi(route: Route) {
   if (path === '/api/auth/me') return json(route, { username: 'admin' });
   if (path === '/api/follows') return json(route, []);
   if (path === '/api/javdb/movies/latest') return json(route, [latestMovie]);
+  if (path === '/api/javdb/rankings' || path === '/api/javdb/rankings/playback' || path === '/api/javdb/rankings/actors') return json(route, []);
+  if (path === '/api/javdb/movies/top') {
+    if (!javdbLoggedIn) return json(route, { error: { code: 'javdb_auth_required', message: 'TOP250 需要登录 JavDB' } }, 403);
+    return json(route, [topMovie]);
+  }
   if (path === '/api/javdb/search') {
     await new Promise((resolve) => setTimeout(resolve, 250));
     return json(route, [staleSearchMovie]);
+  }
+  if (path === '/api/settings/javdb/login' && request.method() === 'GET') {
+    return json(route, javdbLoggedIn
+      ? { configured: true, ok: true, message: 'JavDB 已登录', account: { user_id: '1', username: 'javdb-user', email: null, is_vip: false, vip_expired_at: null } }
+      : { configured: false, ok: false, message: '未登录 JavDB 账号', account: null });
+  }
+  if (path === '/api/settings/javdb/login' && request.method() === 'POST') {
+    javdbLoggedIn = true;
+    return json(route, { ok: true, account: { user_id: '1', username: 'javdb-user', email: null, is_vip: false, vip_expired_at: null } });
+  }
+  if (path === '/api/settings/javdb/logout') {
+    javdbLoggedIn = false;
+    return json(route, { ok: true });
   }
   if (path === '/api/settings' && request.method() === 'GET') return json(route, settingsFixture());
   if (path === '/api/settings' && request.method() === 'PUT') {
@@ -184,6 +223,6 @@ function movie(id: string, number: string, title: string) {
   };
 }
 
-async function json(route: Route, body: unknown) {
-  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+async function json(route: Route, body: unknown, status = 200) {
+  await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 }

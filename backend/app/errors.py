@@ -33,6 +33,11 @@ class JavdbAccessBlockedError(AppError):
         super().__init__(502, "JAVDB_ACCESS_BLOCKED", message)
 
 
+class JavdbAuthRequiredError(AppError):
+    def __init__(self, message: str = "需要登录 JavDB") -> None:
+        super().__init__(403, "javdb_auth_required", message)
+
+
 class AuthError(AppError):
     def __init__(self, message: str = "Authentication required") -> None:
         super().__init__(401, "auth_error", message)

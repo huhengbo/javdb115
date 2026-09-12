@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from app.adapters.javdb_api import JavdbApiClient
 from app.contracts import ManualOfflineRequest, ManualOfflineResponse, MovieBundleOut, TaskOut
 from app.dependencies import get_connection, get_javdb_client, require_user
+from app.errors import IntegrationError, JavdbAuthRequiredError
 from app.repositories.actors import ActorsRepository
 from app.repositories.catalog import CatalogRepository
 from app.repositories.logs import LogsRepository
@@ -59,7 +60,12 @@ def movies_top(
     type_value: str = Query(default=""),
     client: JavdbApiClient = Depends(get_client),
 ) -> list[dict[str, Any]]:
-    return client.movies_top(page=page, limit=limit, rtype=type, type_value=type_value)
+    try:
+        return client.movies_top(page=page, limit=limit, rtype=type, type_value=type_value)
+    except IntegrationError as exc:
+        if exc.message.startswith("TOP250 需要 JavDB 登录"):
+            raise JavdbAuthRequiredError("TOP250 需要登录 JavDB") from exc
+        raise
 
 
 @router.get("/movies/{movie_id}/bundle", response_model=MovieBundleOut)
