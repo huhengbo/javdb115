@@ -148,9 +148,9 @@ export function TasksPage() {
           <p className="text-sm text-slate-500">{activeLabel} · {total} 条</p>
           <p className="mt-0.5 text-xs text-slate-400">每分钟自动刷新 · {formatDateTime(lastRefreshedAt)}</p>
         </div>
-        <button aria-label="刷新任务列表" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-line disabled:opacity-50" disabled={refreshing} onClick={() => void refresh(false, true)} type="button"><RefreshCw className={refreshing ? 'animate-spin' : ''} size={18} /></button>
+        <button aria-label="刷新任务列表" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-50" disabled={refreshing} onClick={() => void refresh(false, true)} type="button"><RefreshCw className={refreshing ? 'animate-spin' : ''} size={18} /></button>
       </div>
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+      <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
         <FilterChip selected={activeFilter === 'all'} onClick={() => selectFilter('all')}>全部 {filterCounts.all}</FilterChip>
         <FilterChip selected={activeFilter === 'attention'} onClick={() => selectFilter('attention')}>需处理 {filterCounts.attention}</FilterChip>
         <FilterChip selected={PROGRESS_FILTERS.has(activeFilter)} onClick={() => setFilterSheet('progress')}>进行中 {progressCount}</FilterChip>
@@ -163,7 +163,7 @@ export function TasksPage() {
           {refreshing ? <p className="mt-3 text-xs text-slate-400" role="status">正在刷新当前任务状态…</p> : null}
           <div className="mt-3"><TaskList tasks={tasks} onChanged={() => void refresh(false, true)} /></div>
           <div className="mt-4 flex min-h-12 items-center justify-center" ref={loaderRef}>
-            {loadingMore ? <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} />加载更多任务</span> : loadMoreError ? <button className="min-h-11 rounded-xl bg-white px-4 text-sm font-medium text-ink ring-1 ring-line" onClick={() => void loadMore()} type="button">加载失败，点击重试</button> : hasMore ? <span className="py-3 text-xs text-slate-400">继续上滑加载</span> : total > 0 ? <span className="py-3 text-xs text-slate-400">已加载全部</span> : null}
+            {loadingMore ? <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} />加载更多任务</span> : loadMoreError ? <button className="min-h-11 px-3 text-sm font-medium text-brand" onClick={() => void loadMore()} type="button">加载失败，重试</button> : hasMore ? <span className="py-3 text-xs text-slate-400">继续上滑加载</span> : total > 0 ? <span className="py-3 text-xs text-slate-400">已加载全部</span> : null}
           </div>
         </>
       )}
@@ -180,8 +180,8 @@ function FilterSheet(props: { readonly mode: 'progress' | 'more'; readonly activ
     <div className="fixed inset-0 z-[70] flex items-end bg-slate-900/35" role="presentation" onClick={props.onClose}>
       <div aria-label={props.mode === 'progress' ? '进行中筛选' : '更多任务筛选'} aria-modal="true" className="ui-surface-elevated w-full rounded-b-none p-4 pb-[max(1rem,env(safe-area-inset-bottom))]" role="dialog" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between"><h2 className="text-base font-semibold text-ink">{props.mode === 'progress' ? '进行中状态' : '更多筛选'}</h2><button aria-label="关闭筛选" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500" onClick={props.onClose} type="button"><X size={19} /></button></div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          {filters.map((filter) => <button aria-pressed={props.activeFilter === filter.value} className={`min-h-12 rounded-xl px-3 text-left text-sm font-medium ${props.activeFilter === filter.value ? 'bg-teal-50 text-brand ring-1 ring-brand/20' : 'bg-slate-50 text-ink'}`} key={filter.value} onClick={() => props.onSelect(filter.value)} type="button"><span className="block">{filter.label}</span><span className="mt-0.5 block text-xs font-normal text-slate-400">{props.counts[filter.value]} 条</span></button>)}
+        <div className="quiet-list mt-2">
+          {filters.map((filter) => <button aria-pressed={props.activeFilter === filter.value} className={`quiet-list-item flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left text-sm ${props.activeFilter === filter.value ? 'font-semibold text-brand' : 'text-ink'}`} key={filter.value} onClick={() => props.onSelect(filter.value)} type="button"><span>{filter.label}</span><span className="text-xs font-normal text-slate-400">{props.counts[filter.value]}</span></button>)}
         </div>
       </div>
     </div>
@@ -189,7 +189,7 @@ function FilterSheet(props: { readonly mode: 'progress' | 'more'; readonly activ
 }
 
 function TaskSkeleton() {
-  return <div className="mt-4 space-y-3" aria-live="polite">{Array.from({ length: 4 }, (_, index) => <div className="flex gap-3 rounded-xl bg-white p-4" key={index}><div className="h-20 w-14 animate-pulse rounded-lg bg-slate-100" /><div className="flex-1"><div className="h-4 w-1/3 animate-pulse rounded bg-slate-100" /><div className="mt-3 h-3 w-full animate-pulse rounded bg-slate-100" /><div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-slate-100" /></div></div>)}</div>;
+  return <div className="quiet-list mt-4" aria-live="polite">{Array.from({ length: 4 }, (_, index) => <div className="quiet-list-item flex gap-3 py-3" key={index}><div className="h-20 w-14 animate-pulse rounded-md bg-slate-100" /><div className="flex-1"><div className="h-4 w-1/3 animate-pulse rounded bg-slate-100" /><div className="mt-3 h-3 w-full animate-pulse rounded bg-slate-100" /><div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-slate-100" /></div></div>)}</div>;
 }
 
 function mergeRefreshedRange(latest: Task[], current: Task[]): Task[] {
