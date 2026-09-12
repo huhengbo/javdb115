@@ -1,108 +1,108 @@
 # javdb115
 
-JavDB 演员订阅和 115 离线下载自动化工具。
+[![CI](https://github.com/huhengbo/javdb115/actions/workflows/ci.yml/badge.svg)](https://github.com/huhengbo/javdb115/actions/workflows/ci.yml)
 
-这个项目是一个移动端优先的 Web 工具。它可以订阅 JavDB 演员，按标签发现新作品，按规则筛选磁力链接，提交到 115 离线下载，并在下载完成后自动整理 115 网盘目录。
+一个移动端优先的 JavDB 演员订阅与 115 离线下载自动化工具。项目提供 Web 管理界面，可完成作品发现、演员订阅、磁力筛选、115 离线任务提交、下载状态跟踪、媒体整理与 Telegram 通知。
 
-## 功能
+> [!IMPORTANT]
+> 本项目只提供自动化工具，不提供、托管或分发媒体内容。请在使用前确认你的使用方式符合所在地区法律法规、目标网站服务条款以及相关平台规则。
 
-- 带登录保护的 Web 管理面板。
-- JavDB 发现页：最新作品、搜索、演员详情、作品详情、预览图、评论、相似作品和排行榜。
-- 演员订阅：支持有码、无码、可播放、含磁链、含字幕、单体作品等 JavDB 标签过滤。
-- 磁力筛选规则：支持最小体积、必须包含关键词、排除关键词。
-- 作品详情手动提交离线下载，重复作品会弹确认，确认后可强制重新提交。
-- 磁力名称可点击 `magnet:` 链接，可唤起本机下载工具，不强绑定 115。
-- 每分钟只轮询未完成的 115 离线任务，避免大量调用 115。
-- 下载完成后自动整理 115 文件：重命名主视频和字幕、保留番号后缀 `-C`、`-U`、`-UC`、生成 Emby 兼容的 NFO、上传 `poster`/`folder` 封面图、删除广告文件，并删除原始离线下载目录。
-- 任务状态机和任务事件记录，可在作品详情里查看任务历史。
-- 最近任务列表显示演员、海报、状态、磁力、错误信息和整理后的目录名称。
-- 115 扫码登录，支持选择登录设备类型，并自动保存 Cookie。
-- 115 目录选择器，用于配置下载临时目录和整理完成目录。
-- Telegram 通知，设置页提供连接检查，自动写入 Bot 命令菜单，支持 `/start` 绑定通知会话。
-- Docker 健康检查接口：`/api/health`。
+## 功能特性
+
+- JavDB 最新作品、搜索、演员详情、作品详情、评论、相似作品与排行榜。
+- 演员订阅与标签筛选，支持有码、无码、可播放、磁链、字幕和单体作品等条件。
+- 磁力筛选规则：最小体积、包含关键词、排除关键词。
+- 手动或自动提交 115 离线下载，并跟踪任务状态和事件历史。
+- 下载完成后自动整理文件、字幕和封面，生成 Emby 兼容 NFO。
+- 115 扫码登录和目录选择。
+- Telegram 通知与 Bot 命令。
+- Web 登录保护和 `/api/health` 健康检查。
+- Docker / Docker Compose 部署。
 
 ## 技术栈
 
-- 后端：Python 3.12+、FastAPI、Pydantic、SQLite。
-- 前端：React 19、TypeScript、Vite、Tailwind CSS。
-- JavDB App API：使用签名请求直接访问移动端接口。
-- 部署：Docker 多阶段构建、Docker Compose。
+| 层 | 技术 |
+| --- | --- |
+| Backend | Python 3.12+、FastAPI、Pydantic、SQLite、httpx |
+| Frontend | React 19、TypeScript、Vite、Tailwind CSS |
+| Quality | pytest、ruff、mypy、ESLint、TypeScript |
+| Deployment | Docker 多阶段构建、Docker Compose |
 
-## 主要第三方库
+## 快速开始
 
-后端：
+### Docker Compose
 
-- `fastapi`：HTTP API。
-- `uvicorn[standard]`：ASGI 服务。
-- `pydantic`：接口契约和配置校验。
-- `httpx`：HTTP 客户端。
-- `p115client`：115 网盘 API、离线任务和扫码登录。
-- `beautifulsoup4`：必要时解析 JavDB 返回内容。
-- `croniter`：Cron 表达式调度。
-- `pytest`、`ruff`、`mypy`：测试、Lint 和类型检查。
+要求：Docker 与 Docker Compose v2。
 
-前端：
+```bash
+git clone https://github.com/huhengbo/javdb115.git
+cd javdb115
+cp .env.example .env
+```
 
-- `react`、`react-dom`：UI 运行时。
-- `vite`：开发服务器和生产构建。
-- `typescript`：静态类型。
-- `tailwindcss`、`postcss`、`autoprefixer`：样式构建。
-- `lucide-react`：图标。
-- `eslint`、`typescript-eslint`、`eslint-plugin-react-hooks`：前端检查。
+至少修改以下配置：
 
-## 目录结构
+```dotenv
+APP_ADMIN_PASSWORD=replace-with-a-strong-password
+APP_SECRET_KEY=replace-with-a-long-random-secret
+```
 
-```text
-backend/
-  app/
-    adapters/       # JavDB、115、Telegram 适配器
-    api/            # FastAPI 路由
-    repositories/   # SQLite 持久化
-    services/       # 业务流程
-    schema.sql      # SQLite 表结构
-  tests/            # 后端测试
-frontend/
-  src/
-    components/     # 可复用 UI 组件
-    pages/          # 页面和底部 Tab
-    lib/            # 前端辅助函数
-Dockerfile
-docker-compose.yml
-.env.example
+启动：
+
+```bash
+docker compose up -d --build
+```
+
+默认访问：`http://127.0.0.1:8080`。
+
+检查状态：
+
+```bash
+docker compose ps
+curl http://127.0.0.1:8080/api/health
+```
+
+查看日志：
+
+```bash
+docker compose logs -f
+```
+
+升级代码后重新构建：
+
+```bash
+git pull
+docker compose up -d --build
 ```
 
 ## 配置
 
-Docker Compose 部署时，可以复制 `.env.example` 为 `.env`；本地运行时也可以直接导出环境变量。
+环境变量：
 
-必填：
+| 变量 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `APP_ADMIN_USERNAME` | 否 | `admin` | Web 管理员用户名 |
+| `APP_ADMIN_PASSWORD` | 是 | - | Web 管理员密码 |
+| `APP_SECRET_KEY` | 是 | - | 会话 Token 签名密钥 |
+| `APP_DATABASE_PATH` | 否 | `data/app.sqlite3` | SQLite 数据库路径；Docker 中固定为 `/data/app.sqlite3` |
+| `APP_SESSION_TTL_HOURS` | 否 | `24` | 登录有效期（小时） |
+| `APP_ACTOR_MOVIE_CHECK_LIMIT` | 否 | `3` | 单次演员订阅检查读取作品数量 |
+| `APP_HTTP_PORT` | 否 | `8080` | Docker Compose 暴露端口 |
 
-- `APP_ADMIN_PASSWORD`：Web 登录密码。
-- `APP_SECRET_KEY`：登录 Token 签名密钥。
+运行后可在 Web 设置页配置：
 
-可选：
+- 115 Cookie、下载临时目录、整理完成目录。
+- 演员订阅检查 Cron。
+- 磁力筛选规则。
+- Telegram Bot Token 与 Chat ID。
 
-- `APP_ADMIN_USERNAME`：Web 登录用户名，默认 `admin`。
-- `APP_DATABASE_PATH`：SQLite 数据库路径，默认 `data/app.sqlite3`；Docker 中使用 `/data/app.sqlite3`。
-- `APP_SESSION_TTL_HOURS`：登录有效期，默认 `24` 小时。
-- `APP_ACTOR_MOVIE_CHECK_LIMIT`：每次订阅检查读取演员作品的数量，默认 `3`。
-
-Web 设置页里的运行时配置：
-
-- `p115_cookie`：115 Cookie，可手动填写，也可通过扫码登录自动写入。
-- `p115_download_dir_id`：115 离线下载临时目录。
-- `p115_completed_dir_id`：115 整理完成目录。
-- `check_cron`：演员订阅检查 Cron，默认 `0 */6 * * *`。
-- `filter_rules`：磁力筛选规则 JSON。
-- `telegram_bot_token`：Telegram Bot Token，发送 Telegram 通知和配置 Bot 菜单时必填。
-- `telegram_chat_id`：Telegram Chat ID，可手动填写，也可在 Telegram 里向 Bot 发送 `/start` 自动绑定。
-- Telegram 连接检查：校验已保存的 `telegram_bot_token` 是否可用，并自动写入 `/start`、`/help`、`/status`、`/check` 命令菜单。
-
-不要提交 `.env`、SQLite 数据库、日志、截图、构建产物或 115 Cookie。项目 `.gitignore` 已经排除了常见运行态文件。
+不要提交 `.env`、SQLite 数据库、日志、截图、构建产物、115 Cookie 或 Telegram Token。
 
 ## 本地开发
 
-后端：
+### Backend
+
+推荐使用 `uv`：
 
 ```bash
 cd backend
@@ -113,68 +113,50 @@ APP_SECRET_KEY=dev-secret \
 .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-前端：
+### Frontend
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev -- --host 0.0.0.0
 ```
 
-打开：
+开发服务器默认运行在 `http://127.0.0.1:5173`，并将 `/api` 代理到 `http://127.0.0.1:8080`。
+
+## 项目结构
 
 ```text
-http://127.0.0.1:5173
+javdb115/
+├── .github/                 # GitHub Actions、Issue / PR 模板、Dependabot
+├── backend/
+│   ├── app/
+│   │   ├── adapters/        # JavDB、115、Telegram 外部适配器
+│   │   ├── api/             # FastAPI 路由
+│   │   ├── repositories/    # SQLite 数据访问
+│   │   ├── services/        # 核心业务流程
+│   │   └── schema.sql       # SQLite 表结构
+│   ├── tests/               # 后端测试
+│   ├── pyproject.toml
+│   └── uv.lock
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── lib/
+│   │   └── pages/
+│   ├── package.json
+│   └── package-lock.json
+├── CONTRIBUTING.md
+├── SECURITY.md
+├── Dockerfile
+├── docker-compose.yml
+└── .env.example
 ```
 
-Vite 开发服务器会把 `/api` 代理到 `http://127.0.0.1:8080`。
+## 质量检查
 
-## Docker 部署
+提交 PR 前建议运行完整检查。
 
-创建 `.env`：
-
-```bash
-cp .env.example .env
-```
-
-至少修改：
-
-```dotenv
-APP_ADMIN_PASSWORD=replace-with-a-strong-password
-APP_SECRET_KEY=replace-with-a-long-random-secret
-```
-
-构建并启动：
-
-```bash
-docker compose up -d --build
-```
-
-访问：
-
-```text
-http://<server-ip>:8080
-```
-
-`docker-compose.yml` 会把持久化数据保存到宿主机的 `./data` 目录。
-
-常用命令：
-
-```bash
-docker compose logs -f
-docker compose ps
-docker compose down
-```
-
-健康检查：
-
-```bash
-curl http://127.0.0.1:8080/api/health
-```
-
-## 校验
-
-后端：
+Backend：
 
 ```bash
 backend/.venv/bin/ruff check backend/app backend/tests
@@ -183,10 +165,32 @@ backend/.venv/bin/python -m compileall -q backend/app backend/tests
 backend/.venv/bin/python -m pytest backend/tests -q
 ```
 
-前端：
+Frontend：
 
 ```bash
 cd frontend
 npm run lint
 npm run build
 ```
+
+GitHub Actions 会在 push 与 pull request 上执行同等检查，并验证 Docker 镜像能够成功构建。
+
+## 数据与备份
+
+Docker Compose 默认将运行数据持久化到仓库目录下的 `./data`。升级或迁移前建议先备份该目录，尤其是 `app.sqlite3`。
+
+## 安全
+
+如果发现安全问题，请不要直接提交包含利用细节、Cookie、Token 或其他敏感信息的公开 Issue。处理方式见 [SECURITY.md](SECURITY.md)。
+
+## 参与贡献
+
+欢迎提交 Issue 和 Pull Request。开发环境、分支与提交建议见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## Roadmap / Issues
+
+已知问题、工程化改进和后续计划统一维护在 [GitHub Issues](https://github.com/huhengbo/javdb115/issues)。
+
+## License
+
+仓库目前尚未声明开源许可证。在许可证明确之前，代码默认受版权保护；相关决策会通过 GitHub Issue 跟踪。

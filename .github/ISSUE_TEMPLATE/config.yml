@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/huhengbo/javdb115/security/advisories/new
+    about: 请优先通过私密 Security Advisory 报告安全问题
