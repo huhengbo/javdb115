@@ -20,32 +20,18 @@ import type {
   TelegramTestResult
 } from './types';
 
-const TOKEN_KEY = 'javdb115.token';
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY);
-}
-
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
   const headers = new Headers(options.headers);
   headers.set('Content-Type', 'application/json');
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-  const response = await fetch(path, { cache: 'no-store', ...options, headers });
+  const response = await fetch(path, {
+    cache: 'no-store',
+    credentials: 'same-origin',
+    ...options,
+    headers
+  });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    if (response.status === 401) {
-      clearToken();
+    if (response.status === 401 && path !== '/api/auth/login') {
       window.dispatchEvent(new CustomEvent('auth-expired'));
     }
     throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
@@ -56,11 +42,19 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return payload as T;
 }
 
-export function login(username: string, password: string): Promise<{ token: string }> {
+export function login(username: string, password: string): Promise<{ username: string }> {
   return api('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password })
   });
+}
+
+export function currentUser(): Promise<{ username: string }> {
+  return api('/api/auth/me');
+}
+
+export function logout(): Promise<{ ok: boolean }> {
+  return api('/api/auth/logout', { method: 'POST' });
 }
 
 export const client = {
