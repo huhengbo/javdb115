@@ -22,7 +22,7 @@ export function LoginPage({ onLoggedIn }: Props) {
     setError(null);
     setSubmitting(true);
     try {
-      await login(username.trim(), password);
+      await login(username, password);
       setPassword('');
       onLoggedIn();
     } catch (err) {
