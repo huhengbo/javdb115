@@ -67,6 +67,7 @@ test('theme selection persists and all supported widths avoid horizontal overflo
 
   await page.goto('/settings');
   for (const theme of themes) {
+    await page.getByRole('button', { name: '选择外观主题' }).click();
     await page.getByRole('button', { name: themeLabel(theme), exact: true }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     for (const width of widths) {
