@@ -72,42 +72,48 @@ export function RankingsPage() {
   const [topPage, setTopPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const loaderRef = useRef<HTMLDivElement>(null);
+  const requestSeq = useRef(0);
   const followByActorId = useMemo(() => Object.fromEntries(follows.map((follow) => [follow.actor_external_id, follow])), [follows]);
   const { selectedMovie, selectedActor, activeOverlayKind, openMovie, closeMovie, openActor, closeActor } =
     useDetailHistory('rankings');
 
   const loadRankings = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     setError(null);
     setHasMore(false);
     setTopPage(1);
-    window.scrollTo({ top: 0 });
     try {
       if (filters.board === 'movies') {
+        const result = await client.rankings(filters.category, filters.period);
+        if (seq !== requestSeq.current) return;
         setActors([]);
-        setMovies(await client.rankings(filters.category, filters.period));
-        return;
-      }
-      if (filters.board === 'playback') {
+        setMovies(result);
+      } else if (filters.board === 'playback') {
+        const result = await client.rankingsPlayback(filters.period, filters.filterBy);
+        if (seq !== requestSeq.current) return;
         setActors([]);
-        setMovies(await client.rankingsPlayback(filters.period, filters.filterBy));
-        return;
-      }
-      if (filters.board === 'actors') {
+        setMovies(result);
+      } else if (filters.board === 'actors') {
+        const result = await client.rankingsActors(filters.category);
+        if (seq !== requestSeq.current) return;
         setMovies([]);
-        setActors(await client.rankingsActors(filters.category));
-        return;
+        setActors(result);
+      } else {
+        const result = await client.moviesTop(1, TOP250_PAGE_SIZE, filters.topType, filters.topValue);
+        if (seq !== requestSeq.current) return;
+        setActors([]);
+        setMovies(result);
+        setHasMore(result.length === TOP250_PAGE_SIZE);
       }
-      setActors([]);
-      const result = await client.moviesTop(1, TOP250_PAGE_SIZE, filters.topType, filters.topValue);
-      setMovies(result);
-      setHasMore(result.length === TOP250_PAGE_SIZE);
+      window.scrollTo({ top: 0 });
     } catch (err) {
+      if (seq !== requestSeq.current) return;
       setMovies([]);
       setActors([]);
       setError((err as Error).message);
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }, [filters]);
 
@@ -158,7 +164,7 @@ export function RankingsPage() {
       <BoardTabs board={filters.board} onChange={(board) => setFilters((current) => normalizeFilters({ ...current, board }))} />
       <RankingsFilters filters={filters} onChange={(next) => setFilters(normalizeFilters(next))} />
       {error ? (
-        <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger">
+        <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger" role="alert">
           <p>{error}</p>
           <button className="mt-2 min-h-10 rounded-md bg-white px-3 text-xs font-medium text-ink ring-1 ring-line" onClick={() => void loadRankings()} type="button">
             重试
@@ -302,7 +308,7 @@ function Chip(props: { readonly active: boolean; readonly label: string; readonl
 
 function LoadingState() {
   return (
-    <p className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+    <p className="mt-4 flex items-center gap-2 text-sm text-slate-500" aria-live="polite">
       <Loader2 className="animate-spin" size={16} />
       加载中...
     </p>
@@ -395,7 +401,7 @@ function ActorRankingCard(props: { readonly actor: RankingActor; readonly rank: 
       <span className="relative">
         <RankBadge rank={props.rank} />
         {props.actor.avatar_url ? (
-          <img alt={name} className="h-20 w-20 rounded-full object-cover" src={imgUrl(props.actor.avatar_url)} />
+          <img alt={name} className="h-20 w-20 rounded-full object-cover" decoding="async" loading="lazy" src={imgUrl(props.actor.avatar_url)} />
         ) : (
           <span className="block h-20 w-20 rounded-full bg-slate-100" />
         )}

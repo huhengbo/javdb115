@@ -187,6 +187,16 @@ app.include_router(tasks.router)
 app.include_router(checks.router)
 
 STATIC_DIR = Path(__file__).with_name("static")
+ROOT_STATIC_FILES = frozenset(
+    {
+        "apple-touch-icon.png",
+        "manifest.webmanifest",
+        "pwa-192x192.png",
+        "pwa-512x512.png",
+        "pwa-maskable-512x512.png",
+        "sw.js",
+    }
+)
 
 if STATIC_DIR.exists():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
@@ -194,6 +204,16 @@ if STATIC_DIR.exists():
 
 @app.get("/{path:path}", include_in_schema=False)
 def frontend(path: str) -> FileResponse:
+    if path in ROOT_STATIC_FILES:
+        asset = STATIC_DIR / path
+        if not asset.is_file():
+            raise RuntimeError(f"Frontend build is missing required asset: {path}")
+        headers = (
+            {"Cache-Control": "no-cache, no-store, must-revalidate"}
+            if path == "sw.js"
+            else None
+        )
+        return FileResponse(asset, headers=headers)
     index = STATIC_DIR / "index.html"
     if not index.exists():
         raise RuntimeError("Frontend build is missing. Run npm run build in frontend.")

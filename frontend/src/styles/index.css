@@ -2,16 +2,114 @@
 @tailwind components;
 @tailwind utilities;
 
+:root,
+[data-theme='harbor'] {
+  color-scheme: light;
+  --ui-canvas: #f4f7f8;
+  --ui-surface: #ffffff;
+  --ui-surface-muted: #eef3f3;
+  --ui-surface-strong: #0f172a;
+  --ui-text: #172026;
+  --ui-text-muted: #64748b;
+  --ui-border: #d7e0e2;
+  --ui-accent: #0f766e;
+  --ui-accent-muted: #ccfbf1;
+  --ui-focus: #0f766e;
+  --ui-warning: #b45309;
+  --ui-danger: #b42318;
+  --ui-success: #047857;
+  --ui-danger-surface: #fef2f2;
+  --ui-success-surface: #ecfdf5;
+  --ui-warning-surface: #fffbeb;
+  --ui-info-surface: #eff6ff;
+  --ui-radius-card: 0.5rem;
+}
+
+[data-theme='graphite'] {
+  color-scheme: dark;
+  --ui-canvas: #0f141a;
+  --ui-surface: #182028;
+  --ui-surface-muted: #202a34;
+  --ui-surface-strong: #090d12;
+  --ui-text: #f1f5f9;
+  --ui-text-muted: #a8b3c2;
+  --ui-border: #34414e;
+  --ui-accent: #0f766e;
+  --ui-accent-muted: #163c3b;
+  --ui-focus: #2dd4bf;
+  --ui-warning: #f59e0b;
+  --ui-danger: #fb7185;
+  --ui-success: #34d399;
+  --ui-danger-surface: #3a2027;
+  --ui-success-surface: #123a31;
+  --ui-warning-surface: #3d3117;
+  --ui-info-surface: #173052;
+  --ui-radius-card: 0.5rem;
+}
+
+[data-theme='paper'] {
+  color-scheme: light;
+  --ui-canvas: #f6f0e6;
+  --ui-surface: #fffaf2;
+  --ui-surface-muted: #f0e6d7;
+  --ui-surface-strong: #4a3525;
+  --ui-text: #35291e;
+  --ui-text-muted: #796a5c;
+  --ui-border: #d7c4aa;
+  --ui-accent: #92400e;
+  --ui-accent-muted: #ffedd5;
+  --ui-focus: #92400e;
+  --ui-warning: #a16207;
+  --ui-danger: #9f1239;
+  --ui-success: #3f6212;
+  --ui-danger-surface: #fff1f2;
+  --ui-success-surface: #f7fee7;
+  --ui-warning-surface: #fefce8;
+  --ui-info-surface: #fff7ed;
+  --ui-radius-card: 0.25rem;
+}
+
+[data-theme='blueprint'] {
+  color-scheme: light;
+  --ui-canvas: #eff6ff;
+  --ui-surface: #ffffff;
+  --ui-surface-muted: #e0ecff;
+  --ui-surface-strong: #0f2c59;
+  --ui-text: #102a43;
+  --ui-text-muted: #486581;
+  --ui-border: #7ca5d8;
+  --ui-accent: #1e40af;
+  --ui-accent-muted: #dbeafe;
+  --ui-focus: #1d4ed8;
+  --ui-warning: #92400e;
+  --ui-danger: #b91c1c;
+  --ui-success: #166534;
+  --ui-danger-surface: #fef2f2;
+  --ui-success-surface: #f0fdf4;
+  --ui-warning-surface: #fffbeb;
+  --ui-info-surface: #dbeafe;
+  --ui-radius-card: 0.25rem;
+}
+
 html {
-  background: #f4f7f8;
-  color: #172026;
+  background: var(--ui-canvas);
+  color: var(--ui-text);
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  background: var(--ui-canvas);
+  color: var(--ui-text);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+[data-theme='paper'] h1,
+[data-theme='paper'] h2,
+[data-theme='paper'] h3 {
+  font-family: Georgia, "Times New Roman", serif;
 }
 
 button,
@@ -19,4 +117,138 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  transition-property: color, background-color, border-color, opacity, box-shadow;
+  transition-duration: 140ms;
+  transition-timing-function: ease-out;
+}
+
+button:not(:disabled):active,
+a:active {
+  opacity: 0.82;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+/* Keep existing Tailwind markup themeable without duplicating four React trees. */
+.bg-white,
+.bg-white\/95 {
+  background-color: var(--ui-surface);
+}
+
+.bg-slate-50,
+.bg-slate-100 {
+  background-color: var(--ui-surface-muted);
+}
+
+.bg-slate-900 {
+  background-color: var(--ui-surface-strong);
+}
+
+.text-slate-700,
+.text-slate-600 {
+  color: var(--ui-text);
+}
+
+.text-slate-500,
+.text-slate-400,
+.text-slate-300 {
+  color: var(--ui-text-muted);
+}
+
+.bg-teal-50 {
+  background-color: var(--ui-accent-muted);
+}
+
+.bg-red-50 {
+  background-color: var(--ui-danger-surface);
+}
+
+.bg-emerald-50 {
+  background-color: var(--ui-success-surface);
+}
+
+.bg-amber-50 {
+  background-color: var(--ui-warning-surface);
+}
+
+.bg-blue-50 {
+  background-color: var(--ui-info-surface);
+}
+
+.text-red-700 {
+  color: var(--ui-danger);
+}
+
+.text-emerald-600,
+.text-emerald-700 {
+  color: var(--ui-success);
+}
+
+.text-amber-700,
+.text-amber-800 {
+  color: var(--ui-warning);
+}
+
+.text-blue-600,
+.text-blue-700 {
+  color: var(--ui-accent);
+}
+
+.border-slate-200,
+.border-red-100,
+.border-red-200,
+.border-red-300,
+.border-emerald-100,
+.border-amber-200 {
+  border-color: var(--ui-border);
+}
+
+.ring-line {
+  --tw-ring-color: var(--ui-border);
+}
+
+.rounded-lg {
+  border-radius: var(--ui-radius-card);
+}
+
+[data-theme='graphite'] .shadow-sm,
+[data-theme='graphite'] .shadow-lg,
+[data-theme='graphite'] .shadow-xl {
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.3);
+}
+
+[data-theme='paper'] .shadow-sm,
+[data-theme='paper'] .shadow-lg,
+[data-theme='paper'] .shadow-xl {
+  box-shadow: 0 1px 2px rgb(53 41 30 / 0.08);
+}
+
+[data-theme='blueprint'] .rounded-md,
+[data-theme='blueprint'] .rounded-lg,
+[data-theme='blueprint'] .rounded-2xl {
+  border-radius: 0.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

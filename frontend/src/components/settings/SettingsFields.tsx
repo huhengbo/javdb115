@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 
 const DEFAULT_FILTER_RULES = {
   min_size_gb: 1,
@@ -110,17 +110,10 @@ function TextAreaField(props: FieldProps & {
 function StructuredFilterRules({ onChange, rules }: { readonly onChange: (value: string) => void; readonly rules: FilterRules }) {
   return (
     <div className="grid gap-3">
-      <label className="block">
-        <span className="text-sm font-medium text-ink">最小体积（GB）</span>
-        <input
-          className="mt-2 min-h-11 w-full rounded-md border border-line px-3 text-sm"
-          min="0"
-          onChange={(event) => updateRules(onChange, rules, { min_size_gb: Number(event.target.value) })}
-          step="0.1"
-          type="number"
-          value={rules.min_size_gb}
-        />
-      </label>
+      <NumberRuleField
+        value={rules.min_size_gb}
+        onCommit={(value) => updateRules(onChange, rules, { min_size_gb: value })}
+      />
       <KeywordField
         label="必须包含关键词"
         value={rules.required_keywords}
@@ -135,15 +128,61 @@ function StructuredFilterRules({ onChange, rules }: { readonly onChange: (value:
   );
 }
 
+function NumberRuleField(props: { readonly value: number; readonly onCommit: (value: number) => void }) {
+  const [draft, setDraft] = useState(String(props.value));
+  const [error, setError] = useState<string | null>(null);
+  const errorId = useId();
+
+  useEffect(() => setDraft(String(props.value)), [props.value]);
+
+  function commit() {
+    const parsed = Number(draft);
+    if (draft.trim() === '' || !Number.isFinite(parsed) || parsed < 0) {
+      setError('请输入大于或等于 0 的数字');
+      return;
+    }
+    setError(null);
+    props.onCommit(parsed);
+  }
+
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-ink">最小体积（GB）</span>
+      <input
+        aria-describedby={error ? errorId : undefined}
+        aria-invalid={Boolean(error)}
+        className={`mt-2 min-h-11 w-full rounded-md border px-3 text-sm ${error ? 'border-red-300' : 'border-line'}`}
+        inputMode="decimal"
+        min="0"
+        onBlur={commit}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          if (error) setError(null);
+        }}
+        step="0.1"
+        type="number"
+        value={draft}
+      />
+      {error ? <span className="mt-1 block text-xs text-danger" id={errorId}>{error}</span> : null}
+    </label>
+  );
+}
+
 function KeywordField(props: { readonly label: string; readonly onChange: (keywords: string[]) => void; readonly value: readonly string[] }) {
+  const normalized = props.value.join('\n');
+  const [draft, setDraft] = useState(normalized);
+
+  useEffect(() => setDraft(normalized), [normalized]);
+
   return (
     <label className="block">
       <span className="text-sm font-medium text-ink">{props.label}</span>
       <textarea
         className="mt-2 min-h-20 w-full rounded-md border border-line px-3 py-2 text-sm"
-        onChange={(event) => props.onChange(splitKeywords(event.target.value))}
+        onBlur={() => props.onChange(splitKeywords(draft))}
+        onChange={(event) => setDraft(event.target.value)}
         placeholder="每行一个关键词"
-        value={props.value.join('\n')}
+        value={draft}
       />
     </label>
   );
