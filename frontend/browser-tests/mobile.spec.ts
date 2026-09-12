@@ -71,8 +71,11 @@ test('appearance modes persist, follow system, and avoid horizontal overflow', a
   const widths = [320, 390, 430, 1440];
 
   await page.goto('/settings');
+  await expect(page.getByLabel('115 Cookie')).toBeEnabled();
   for (const mode of modes) {
-    await page.getByRole('button', { name: new RegExp(mode.label) }).click();
+    const modeButton = page.getByRole('button', { name: new RegExp(mode.label) });
+    await modeButton.click();
+    await expect(modeButton).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('html')).toHaveAttribute('data-theme-preference', mode.preference);
     await expect(page.locator('html')).toHaveAttribute('data-theme', mode.resolved);
     for (const width of widths) {
@@ -84,7 +87,9 @@ test('appearance modes persist, follow system, and avoid horizontal overflow', a
   }
 
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.getByRole('button', { name: /自动/ }).click();
+  const autoButton = page.getByRole('button', { name: /自动/ });
+  await autoButton.click();
+  await expect(autoButton).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'system');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'graphite');
 
