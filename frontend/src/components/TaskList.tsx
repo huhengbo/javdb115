@@ -173,7 +173,7 @@ function directoryLabel(task: Task): string {
 }
 
 function DeleteButton({ task, onClick }: { readonly task: Task; readonly onClick: () => void }) {
-  return <button aria-label={`删除任务 ${task.work?.code ?? task.id}`} className="mt-4 flex min-h-10 items-center gap-2 text-sm font-medium text-danger" onClick={(event) => { event.stopPropagation(); onClick(); }} type="button"><Trash2 size={16} />删除记录</button>;
+  return <button aria-label={`删除任务 ${task.work?.code ?? task.id}`} className="mt-4 flex min-h-11 items-center gap-2 text-sm font-medium text-danger" onClick={(event) => { event.stopPropagation(); onClick(); }} type="button"><Trash2 size={16} />删除记录</button>;
 }
 
 function DeleteDescription({ error, task }: { readonly error: string | null; readonly task: Task }) {
@@ -200,7 +200,7 @@ function RetryButton({ taskId, onChanged }: { readonly taskId: number; readonly 
 
   return (
     <div className="mt-3">
-      <button className="flex min-h-10 items-center gap-2 text-sm font-medium text-brand disabled:opacity-60" disabled={isRetrying} onClick={(event) => { event.stopPropagation(); void retry(); }} type="button">{isRetrying ? <Loader2 className="animate-spin" size={16} /> : null}{isRetrying ? '重试中' : '手动重试'}</button>
+      <button className="flex min-h-11 items-center gap-2 text-sm font-medium text-brand disabled:opacity-60" disabled={isRetrying} onClick={(event) => { event.stopPropagation(); void retry(); }} type="button">{isRetrying ? <Loader2 className="animate-spin" size={16} /> : null}{isRetrying ? '重试中' : '手动重试'}</button>
       {error ? <p className="mt-2 rounded-md bg-red-50 p-3 text-sm text-danger" role="alert">{error}</p> : null}
     </div>
   );
