@@ -53,7 +53,7 @@ test('settings preserve multiline filter drafts and save normalized values', asy
 
 test('directory picker uses enter-then-confirm mobile flow', async ({ page }) => {
   await page.goto('/settings');
-  const downloadDirectory = page.getByRole('button', { name: /^下载临时目录/ });
+  const downloadDirectory = page.getByRole('button', { name: /^115 下载临时目录/ });
   await downloadDirectory.click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
