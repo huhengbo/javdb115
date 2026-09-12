@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { currentUser, logout as logoutRequest } from './api';
 import { AppShell } from './components/AppShell';
+import { MovieDetailNavigator } from './components/discovery/MovieDetailNavigator';
 import { DashboardPage } from './pages/DashboardPage';
 import { DiscoveryPage } from './pages/DiscoveryPage';
 import { FollowingPage } from './pages/FollowingPage';
@@ -99,14 +100,16 @@ export default function App() {
   }
 
   return (
-    <AppShell active={tab} onChange={changeTab} onLogout={logout} onOpenSettings={() => changeTab('settings')}>
-      <TabPanel active={tab === 'dashboard'} mounted={visitedTabs.has('dashboard')}><DashboardPage onOpenSettings={() => changeTab('settings')} /></TabPanel>
-      <TabPanel active={tab === 'discovery'} mounted={visitedTabs.has('discovery')}><DiscoveryPage /></TabPanel>
-      <TabPanel active={tab === 'rankings'} mounted={visitedTabs.has('rankings')}><RankingsPage /></TabPanel>
-      <TabPanel active={tab === 'following'} mounted={visitedTabs.has('following')}><FollowingPage /></TabPanel>
-      <TabPanel active={tab === 'tasks'} mounted={visitedTabs.has('tasks')}><TasksPage /></TabPanel>
-      <TabPanel active={tab === 'settings'} mounted={visitedTabs.has('settings')}><SettingsPage /></TabPanel>
-    </AppShell>
+    <MovieDetailNavigator scope="global-task-movies">
+      <AppShell active={tab} onChange={changeTab} onLogout={logout} onOpenSettings={() => changeTab('settings')}>
+        <TabPanel active={tab === 'dashboard'} mounted={visitedTabs.has('dashboard')}><DashboardPage onOpenSettings={() => changeTab('settings')} /></TabPanel>
+        <TabPanel active={tab === 'discovery'} mounted={visitedTabs.has('discovery')}><DiscoveryPage /></TabPanel>
+        <TabPanel active={tab === 'rankings'} mounted={visitedTabs.has('rankings')}><RankingsPage /></TabPanel>
+        <TabPanel active={tab === 'following'} mounted={visitedTabs.has('following')}><FollowingPage /></TabPanel>
+        <TabPanel active={tab === 'tasks'} mounted={visitedTabs.has('tasks')}><TasksPage /></TabPanel>
+        <TabPanel active={tab === 'settings'} mounted={visitedTabs.has('settings')}><SettingsPage /></TabPanel>
+      </AppShell>
+    </MovieDetailNavigator>
   );
 }
 
