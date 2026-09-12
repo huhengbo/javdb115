@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from sqlite3 import Connection
@@ -163,7 +163,10 @@ app.add_exception_handler(AppError, app_error_handler)
 
 
 @app.middleware("http")
-async def add_security_headers(request: Request, call_next: Callable[[Request], Any]) -> Response:
+async def add_security_headers(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
