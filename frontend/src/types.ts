@@ -67,6 +67,7 @@ export type SettingItem = {
   key: string;
   value: string | null;
   is_secret: boolean;
+  configured: boolean;
 };
 
 export type TelegramTestResult = {
@@ -79,55 +80,6 @@ export type DirectoryItem = {
   name: string;
   path: string | null;
   is_directory: boolean;
-};
-
-export type P115Account = {
-  user_id: string | null;
-  user_name: string | null;
-  vip_label: string | null;
-  vip_expires_at: string | null;
-  space_total: string | null;
-  space_used: string | null;
-  space_remaining: string | null;
-};
-
-export type P115Status = {
-  configured: boolean;
-  ok: boolean;
-  message: string;
-  checked_at: string | null;
-  account: P115Account | null;
-};
-
-export type JavdbStatus = {
-  ok: boolean;
-  message: string;
-  checked_at: string;
-};
-
-export type ConnectionStatus = {
-  p115: P115Status;
-  javdb: JavdbStatus;
-};
-
-export type TaskBreakdown = {
-  by_status: Record<string, number>;
-  by_stage: Record<string, number>;
-  attention: number;
-};
-
-export type Dashboard = {
-  stats: {
-    submitted: number;
-    downloading: number;
-    organizing: number;
-    completed: number;
-    failed: number;
-  };
-  task_breakdown: TaskBreakdown;
-  connections: ConnectionStatus;
-  attention_tasks: Task[];
-  recent_tasks: Task[];
 };
 
 export type Follow = {
@@ -147,102 +99,93 @@ export type Follow = {
 
 export type FollowCheckResult = {
   follow_id: number;
-  actor_external_id: string;
-  actor_name: string;
-  selected_tag_ids: string[];
-  selected_tag_names: string[];
-  new_count: number;
-  movies: Movie[];
+  checked: number;
+  submitted: number;
+  skipped: number;
+  errors: number;
 };
 
-export type PreviewImage = {
-  thumb_url: string;
-  large_url: string;
+export type Dashboard = {
+  stats: {
+    submitted: number;
+    downloading: number;
+    organizing: number;
+    completed: number;
+    failed: number;
+  };
+  recent_tasks: Task[];
 };
 
 export type Movie = {
   id: string;
-  number: string;
+  code: string;
   title: string;
-  thumb_url: string;
-  cover_url: string;
-  duration: number;
-  release_date: string;
-  score: string;
-  can_play: boolean;
-  has_cnsub: boolean;
-  has_preview_images: boolean;
-  magnets_count: number;
-  preview_images?: PreviewImage[];
+  cover_url?: string;
+  release_date?: string;
+  duration?: string;
+  score?: string;
+  tags?: string[];
+};
+
+export type MagnetItem = {
+  hash: string;
+  name: string;
+  url: string;
+  size?: string;
+  size_bytes?: number;
+  has_subtitle?: boolean;
+  is_hd?: boolean;
+  share_date?: string;
 };
 
 export type MovieDetail = {
   id: string;
-  number: string;
+  code: string;
   title: string;
-  cover_url: string;
-  duration: number;
-  score: string;
-  release_date: string;
-  has_cnsub: boolean;
-  has_preview_images: boolean;
-  actors: { id: string; name: string; avatar_url: string }[];
-  tags: { id: string; name: string }[];
-  preview_images: PreviewImage[];
-  relative_movies: Movie[];
-  actor_movies: Movie[];
-};
-
-export type RankingActor = {
-  id: string;
-  name: string | null;
-  name_zht: string | null;
-  avatar_url: string | null;
-};
-
-export type MagnetItem = {
-  name: string;
-  hash: string;
-  size: number;
-  cnsub: boolean;
-  hd: boolean;
-  created_at: string;
-  url?: string;
-  pikpak_url?: string;
+  cover_url?: string;
+  poster_url?: string;
+  release_date?: string;
+  duration?: string;
+  score?: string;
+  tags?: string[];
+  actors?: { id: string; name: string; avatar_url?: string }[];
+  previews?: string[];
 };
 
 export type MovieReview = {
-  id: number;
-  username: string;
-  status_title: string;
-  score: number;
+  id?: string;
+  username?: string;
   content: string;
-  likes_count: number;
-  created_at: string;
+  score?: string;
+  created_at?: string;
 };
 
 export type MovieBundle = {
   detail: MovieDetail;
   magnets: MagnetItem[];
   reviews: MovieReview[];
-  reviews_error: string | null;
+  reviews_error?: string | null;
 };
 
 export type ActorDetail = {
   id: string;
   name: string;
-  name_zht: string;
-  avatar_url: string;
-  birthday: string;
-  height: number;
-  cup: string;
-  videos_count: number;
+  avatar_url?: string;
+  bio?: string;
+  tags?: { id: string; name: string }[];
+};
+
+export type RankingActor = {
+  id: string;
+  name: string;
+  avatar_url?: string;
+  rank?: number;
 };
 
 export type ManualOfflineResult = {
   ok: boolean;
-  task_id: number | null;
-  duplicate_task: Task | null;
+  task_id?: number | null;
+  duplicate_task?: Task | null;
 };
 
 export type P115LoginDevice = {
@@ -259,8 +202,6 @@ export type P115QrStart = {
 };
 
 export type P115QrStatus = {
-  session_id: string;
   status: string;
-  message: string;
-  account: P115Account | null;
+  message?: string;
 };
