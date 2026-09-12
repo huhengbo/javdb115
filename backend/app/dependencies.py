@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from sqlite3 import Connection
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 
 from app.config import AppConfig, load_config
 from app.database import Database
@@ -25,10 +25,19 @@ def get_connection(database: Database = Depends(get_database)) -> Generator[Conn
         yield connection
 
 
-def get_token(authorization: str | None = Header(default=None)) -> str:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise AuthError()
-    return authorization.removeprefix("Bearer ").strip()
+def get_token(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    config: AppConfig = Depends(get_config),
+) -> str:
+    cookie_token = request.cookies.get(config.session_cookie_name)
+    if cookie_token:
+        return cookie_token
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+        if token:
+            return token
+    raise AuthError()
 
 
 def require_user(
