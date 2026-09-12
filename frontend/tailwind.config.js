@@ -4,12 +4,12 @@ export default {
   theme: {
     extend: {
       colors: {
-        ink: '#172026',
-        mist: '#F4F7F8',
-        line: '#D7E0E2',
-        brand: '#0F766E',
-        warn: '#B45309',
-        danger: '#B42318'
+        ink: 'var(--ui-text)',
+        mist: 'var(--ui-canvas)',
+        line: 'var(--ui-border)',
+        brand: 'var(--ui-accent)',
+        warn: 'var(--ui-warning)',
+        danger: 'var(--ui-danger)'
       }
     }
   },
