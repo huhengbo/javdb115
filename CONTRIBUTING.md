@@ -18,6 +18,17 @@
 - `docs/<name>`：文档
 - `chore/<name>`：工程化或维护
 
+## 仓库治理与合并策略
+
+- `master` 是项目默认分支。当前文档、CI 与发布流程统一以 `master` 为基准，不为分支命名本身额外迁移到 `main`。
+- 默认分支的改动应通过 Pull Request 合并，不直接绕过 CI 推送失败代码。
+- 合并方式统一使用 **Squash merge**，保持 `master` 历史一项改动对应一个清晰提交。
+- PR 标题使用 Conventional Commits 风格，例如 `feat: ...`、`fix: ...`、`docs: ...`、`chore: ...`；Squash 后以 PR 标题作为主提交标题。
+- 合并前必须通过核心 CI：Python 3.12 / 3.13 后端检查、Frontend、Mobile browser interactions、Web E2E smoke，以及 Docker security + build。
+- 默认分支禁止 force push 和删除。
+- 当前由单维护者管理，不强制设置审批人数或 CODEOWNERS 审批；代码所有权仍由 `.github/CODEOWNERS` 明确。
+- 不强制 PR 分支始终手动更新到最新 `master`；当默认分支变化导致检查失效或冲突时，再更新分支并重新验证，避免无意义重复构建。
+
 ## Backend
 
 ```bash
