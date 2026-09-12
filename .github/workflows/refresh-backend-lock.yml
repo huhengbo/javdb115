@@ -1,0 +1,38 @@
+name: Refresh backend lock
+
+on:
+  push:
+    branches: [chore/upgrade-backend-dependencies]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: chore/upgrade-backend-dependencies
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Refresh backend lock
+        run: |
+          python -m pip install "uv==0.12.13"
+          cd backend
+          uv lock --upgrade
+          uv sync --all-extras
+          uv run python -c "import p115client; print('p115client:', getattr(p115client, '__version__', 'unknown'))"
+      - name: Commit refreshed lock
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/uv.lock
+          if git diff --cached --quiet; then
+            echo "Lock file already current"
+            exit 0
+          fi
+          git commit -m "chore(backend): refresh dependency lock"
+          git push
