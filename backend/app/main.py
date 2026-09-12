@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse, Response
 
-from app.adapters.javdb_api import JavdbApiClient
+from app.adapters.javdb_api import client_from_token
 from app.api import auth, checks, follows, health, image_proxy, javdb_proxy, settings, tasks
 from app.config import load_config
 from app.database import Database
@@ -104,7 +104,7 @@ def _run_follow_check(connection: Connection) -> None:
             tasks=TasksRepository(connection),
             logs=LogsRepository(connection),
             settings=settings_repo,
-            javdb=JavdbApiClient(),
+            javdb=client_from_token(settings_repo.get("javdb_token")),
         )
     ).check_all_enabled()
 

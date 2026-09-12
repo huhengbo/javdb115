@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The project follows Sem
 
 ## [Unreleased]
 
+- 后端接入独立 JavDB App client：登录换 token，统一封装现有公开接口，并补充演员/片商/系列目录、磁链搜索、以图搜片、片单文章，以及收藏/想看/播放等需登录方法。广告和支付下单不接入。
+
 ## [0.1.1] - 2026-09-12
 
 > 本版本聚焦移动端体验与核心列表交互，在不改变现有 React + Tailwind 架构的前提下完成界面现代化，并补齐任务分页、统一详情跳转和预览图拖拽体验。

@@ -59,6 +59,8 @@ def test_dashboard_status_reports_javdb_access_health(tmp_path: Path) -> None:
     javdb_status = cast(dict[str, Any], status["javdb"])
 
     assert javdb_status["ok"] is True
+    assert javdb_status["configured"] is False
+    assert javdb_status["account"] is None
     assert javdb_status["message"] == "JAVDB App API 可访问"
 
 
@@ -75,6 +77,20 @@ def test_dashboard_status_exposes_javdb_access_error(tmp_path: Path) -> None:
     assert "JAVDB_ACCESS_BLOCKED" in str(javdb_status["message"])
 
 
+def test_dashboard_status_marks_expired_javdb_login_unhealthy(tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    settings = SettingsRepository(connection)
+    settings.upsert("javdb_token", "expired-token", False)
+
+    status = IntegrationStatusService(settings, ExpiredJavdb()).dashboard_status()
+    javdb_status = cast(dict[str, Any], status["javdb"])
+
+    assert javdb_status["configured"] is True
+    assert javdb_status["ok"] is False
+    assert "登录已失效" in str(javdb_status["message"])
+    assert javdb_status["account"] is None
+
+
 class HealthyJavdb:
     def startup(self) -> dict[str, object]:
         return {"ok": True}
@@ -83,6 +99,14 @@ class HealthyJavdb:
 class BlockedJavdb:
     def startup(self) -> dict[str, object]:
         raise IntegrationError("JAVDB_ACCESS_BLOCKED: https://javdb.com")
+
+
+class ExpiredJavdb:
+    def startup(self) -> dict[str, object]:
+        return {"ok": True}
+
+    def current_user(self) -> dict[str, object]:
+        raise IntegrationError("請登錄帳號")
 
 
 def insert_task(connection: Connection, status: str, stage: str) -> None:

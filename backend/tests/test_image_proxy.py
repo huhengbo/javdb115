@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.media_urls import build_upstream_image_url, external_image_url
+from app.media_urls import build_upstream_image_url, decode_image_payload, external_image_url
 
 
 def test_build_upstream_image_url_maps_tp_small_covers_to_jdbstatic_covers() -> None:
@@ -58,3 +58,17 @@ def test_external_image_url_keeps_unknown_hosts() -> None:
     url = external_image_url("https://example.com/image.jpg")
 
     assert url == "https://example.com/image.jpg"
+
+
+def test_decode_image_payload_accepts_jpeg() -> None:
+    jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF"
+
+    assert decode_image_payload(jpeg) == jpeg
+
+
+def test_decode_image_payload_xors_tokenized_tp_bytes() -> None:
+    jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF"
+    key = 0x60
+    obfuscated = bytes([key, *[byte ^ key for byte in jpeg]])
+
+    assert decode_image_payload(obfuscated) == jpeg

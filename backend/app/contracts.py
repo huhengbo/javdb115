@@ -212,6 +212,31 @@ class P115QrStatusResponse(BaseModel):
     account: P115AccountOut | None = None
 
 
+class JavdbLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class JavdbAccountOut(BaseModel):
+    user_id: str | None = None
+    username: str | None = None
+    email: str | None = None
+    is_vip: bool | None = None
+    vip_expired_at: str | None = None
+
+
+class JavdbLoginResponse(BaseModel):
+    ok: bool
+    account: JavdbAccountOut | None = None
+
+
+class JavdbLoginStatusResponse(BaseModel):
+    configured: bool
+    ok: bool
+    message: str
+    account: JavdbAccountOut | None = None
+
+
 class P115StatusOut(BaseModel):
     configured: bool
     ok: bool
@@ -224,6 +249,8 @@ class JavdbStatusOut(BaseModel):
     ok: bool
     message: str
     checked_at: str
+    configured: bool = False
+    account: JavdbAccountOut | None = None
 
 
 class ConnectionStatusOut(BaseModel):

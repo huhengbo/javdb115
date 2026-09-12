@@ -6,6 +6,9 @@ from fastapi import APIRouter, Depends, Query
 
 from app.contracts import (
     DirectoryItem,
+    JavdbLoginRequest,
+    JavdbLoginResponse,
+    JavdbLoginStatusResponse,
     P115LoginDevice,
     P115QrStartRequest,
     P115QrStartResponse,
@@ -18,6 +21,7 @@ from app.contracts import (
 from app.dependencies import get_connection, require_user
 from app.repositories.settings import SettingsRepository
 from app.services.cloud import CloudServiceFactory, DirectoryService
+from app.services.javdb_login import JavdbLoginService
 from app.services.notifier import NotificationService
 from app.services.p115_login import qr_login_manager
 from app.services.settings import SettingsService
@@ -86,3 +90,26 @@ def p115_qrcode_status(
 def cancel_p115_qrcode_login(session_id: str) -> dict[str, bool]:
     qr_login_manager.cancel(session_id)
     return {"ok": True}
+
+
+@router.get("/javdb/login", response_model=JavdbLoginStatusResponse)
+def javdb_login_status(
+    connection: Connection = Depends(get_connection),
+) -> dict[str, object]:
+    return JavdbLoginService(SettingsRepository(connection)).status()
+
+
+@router.post("/javdb/login", response_model=JavdbLoginResponse)
+def javdb_login(
+    payload: JavdbLoginRequest,
+    connection: Connection = Depends(get_connection),
+) -> dict[str, object]:
+    return JavdbLoginService(SettingsRepository(connection)).login(
+        payload.username,
+        payload.password,
+    )
+
+
+@router.post("/javdb/logout")
+def javdb_logout(connection: Connection = Depends(get_connection)) -> dict[str, bool]:
+    return JavdbLoginService(SettingsRepository(connection)).logout()
