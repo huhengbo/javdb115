@@ -144,9 +144,9 @@ export function RankingsPage() {
       <BoardTabs board={filters.board} onChange={(board) => setFilters((current) => normalizeFilters({ ...current, board }))} />
       <div className="flex items-center justify-between gap-2 border-b border-line py-2">
         <p className="min-w-0 truncate text-xs text-slate-500">{filterSummary(filters)}</p>
-        <button className="flex min-h-9 shrink-0 items-center gap-1.5 px-1 text-sm font-medium text-brand" onClick={() => setFilterOpen(true)} type="button"><Filter size={15} />筛选</button>
+        <button className="flex min-h-11 shrink-0 items-center gap-1.5 px-1 text-sm font-medium text-brand" onClick={() => setFilterOpen(true)} type="button"><Filter size={15} />筛选</button>
       </div>
-      {error ? <InlineAlert className="mt-3" tone="danger"><p>{error}</p><button className="mt-2 min-h-9 text-xs font-medium text-brand" onClick={() => void loadRankings()} type="button">重试</button></InlineAlert> : null}
+      {error ? <InlineAlert className="mt-3" tone="danger"><p>{error}</p><button className="mt-2 min-h-11 text-xs font-medium text-brand" onClick={() => void loadRankings()} type="button">重试</button></InlineAlert> : null}
       {loading ? <LoadingState board={filters.board} /> : null}
       {!loading && !error && (filters.board === 'movies' || filters.board === 'playback' || filters.board === 'top250') ? <MovieRankingList hasMore={filters.board === 'top250' && hasMore} loadingMore={loadingMore} loaderRef={loaderRef} movies={movies} onOpen={openMovie} showLoader={filters.board === 'top250'} /> : null}
       {!loading && !error && filters.board === 'actors' ? <ActorRankingList actors={actors} onOpen={openActor} /> : null}
@@ -173,7 +173,7 @@ function RankingFilterSheet(props: { readonly filters: RankingFilters; readonly 
   return (
     <div className="fixed inset-0 z-[70] flex items-end bg-slate-900/35" role="presentation" onClick={props.onClose}>
       <div aria-label="排行筛选" aria-modal="true" className="ui-surface-elevated max-h-[78dvh] w-full overflow-y-auto rounded-b-none p-4 pb-[max(1rem,env(safe-area-inset-bottom))]" role="dialog" onClick={(event) => event.stopPropagation()}>
-        <div className="flex items-center justify-between"><h2 className="text-base font-semibold text-ink">筛选</h2><button aria-label="关闭筛选" className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500" onClick={props.onClose} type="button"><X size={19} /></button></div>
+        <div className="flex items-center justify-between"><h2 className="text-base font-semibold text-ink">筛选</h2><button aria-label="关闭筛选" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500" onClick={props.onClose} type="button"><X size={19} /></button></div>
         <div className="mt-3 space-y-4">
           {showCategory ? <FilterSection title={filters.board === 'top250' ? '类型' : '分类'}><div className="flex flex-wrap gap-2">{filters.board === 'top250' ? <FilterChip selected={filters.topType === 'all'} onClick={() => onChange({ ...filters, topType: 'all', topValue: '' })}>全部</FilterChip> : null}{categories.map((option) => <FilterChip selected={categoryActive(filters, option.value)} key={option.value} onClick={() => onChange(selectCategory(filters, option.value))}>{option.label}</FilterChip>)}</div></FilterSection> : null}
           {showPeriod ? <FilterSection title="周期"><div className="flex flex-wrap gap-2">{PERIODS.map((option) => <FilterChip selected={filters.period === option.value} key={option.value} onClick={() => onChange({ ...filters, period: option.value })}>{option.label}</FilterChip>)}</div></FilterSection> : null}
