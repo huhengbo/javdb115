@@ -28,7 +28,9 @@ class Database:
         with self.connect() as connection:
             connection.executescript(schema_path.read_text(encoding="utf-8"))
             apply_migrations(connection)
-            SettingsRepository(connection).delete_obsolete()
+            settings = SettingsRepository(connection)
+            settings.delete_obsolete()
+            settings.encrypt_plaintext_secrets()
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
