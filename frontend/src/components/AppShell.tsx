@@ -34,36 +34,33 @@ const pageTitles: Record<Tab, string> = {
 export function AppShell({ active, onChange, onLogout, onOpenSettings, children }: Props) {
   const online = useOnlineStatus();
   const keyboardVisible = useKeyboardVisible();
-  const usesLegacyPageHeading = active === 'settings';
 
   return (
     <div className={`min-h-dvh bg-mist ${keyboardVisible ? 'pb-0' : 'pb-[calc(4rem+env(safe-area-inset-bottom))]'}`}>
-      <header className="sticky top-0 z-40 border-b border-line bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-line/70 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
-          <div className="min-w-0">
-            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">JAVDB 115</p>
-            {usesLegacyPageHeading ? <p className="truncate text-xs text-slate-500">配置与偏好</p> : <h1 className="truncate text-base font-semibold leading-5 text-ink">{pageTitles[active]}</h1>}
-          </div>
+          <h1 className="truncate text-[17px] font-semibold tracking-[-0.01em] text-ink">{pageTitles[active]}</h1>
           <div className="flex items-center gap-1">
-            <button aria-label="打开设置" className={`flex h-11 w-11 items-center justify-center rounded-full ${active === 'settings' ? 'bg-teal-50 text-brand' : 'text-slate-500 hover:bg-slate-100'}`} onClick={onOpenSettings} type="button"><Settings size={19} /></button>
-            {active === 'settings' ? <button aria-label="退出登录" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-danger" onClick={onLogout} type="button"><LogOut size={19} /></button> : null}
+            <button aria-label="打开设置" className={`flex h-10 w-10 items-center justify-center rounded-full ${active === 'settings' ? 'text-brand' : 'text-slate-500 hover:bg-slate-100'}`} onClick={onOpenSettings} type="button"><Settings size={19} /></button>
+            {active === 'settings' ? <button aria-label="退出登录" className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-danger" onClick={onLogout} type="button"><LogOut size={19} /></button> : null}
           </div>
         </div>
       </header>
-      {!online ? <p className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-30 bg-amber-50 px-4 py-2 text-center text-xs text-amber-800" role="status">当前离线，115、任务和设置操作暂不可用。</p> : null}
+      {!online ? <p className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-30 bg-amber-50 px-4 py-2 text-center text-xs text-amber-800" role="status">当前离线，部分操作暂不可用。</p> : null}
       <main className="app-page mx-auto w-full max-w-3xl px-4 py-4 sm:py-5">
-        {active === 'settings' ? <div className="mb-5 space-y-4"><PwaInstallPanel /><ThemePicker /></div> : null}
+        {active === 'settings' ? <div className="mb-5 space-y-5"><ThemePicker /><PwaInstallPanel /></div> : null}
         {children}
       </main>
       {!keyboardVisible ? (
-        <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-[80] border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
-          <div className="mx-auto grid h-16 max-w-3xl grid-cols-5 gap-1 px-2 py-1.5">
+        <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-[80] border-t border-line/70 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
+          <div className="mx-auto grid h-16 max-w-3xl grid-cols-5 px-2">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const selected = active === tab.id;
               return (
-                <button aria-current={selected ? 'page' : undefined} key={tab.id} className={`group flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-medium ${selected ? 'bg-teal-50 text-brand' : 'text-slate-500 hover:bg-slate-100'}`} onClick={() => onChange(tab.id)} type="button">
-                  <Icon aria-hidden="true" size={20} strokeWidth={selected ? 2.4 : 2} /><span>{tab.label}</span>
+                <button aria-current={selected ? 'page' : undefined} key={tab.id} className={`relative flex min-h-12 flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${selected ? 'text-brand' : 'text-slate-500'}`} onClick={() => onChange(tab.id)} type="button">
+                  {selected ? <span className="absolute top-0 h-0.5 w-5 rounded-full bg-brand" /> : null}
+                  <Icon aria-hidden="true" size={20} strokeWidth={selected ? 2.35 : 2} /><span>{tab.label}</span>
                 </button>
               );
             })}
