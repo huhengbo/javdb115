@@ -31,7 +31,7 @@ export function ConfirmDialog(props: Props) {
   return (
     <dialog
       aria-labelledby={titleId}
-      className="m-0 max-h-none max-w-none bg-transparent p-0 backdrop:bg-black/60 sm:m-auto"
+      className="fixed inset-0 m-0 h-dvh w-screen max-h-none max-w-none bg-transparent p-0 backdrop:bg-black/60 sm:flex sm:items-center sm:justify-center"
       ref={dialogRef}
       onCancel={(event) => {
         if (props.busy) {
