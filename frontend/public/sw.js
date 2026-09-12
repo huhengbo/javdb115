@@ -1,8 +1,8 @@
-/* global self, caches, URL, __PWA_ASSET_LIST__ */
+/* global self, caches, URL */
 
 const BUILD_ID = '__PWA_BUILD_ID__';
 const CACHE_NAME = `javdb115-shell-${BUILD_ID}`;
-const PRECACHE_URLS = __PWA_ASSET_LIST__;
+const PRECACHE_URLS = __PWA_ASSET_LIST__; // eslint-disable-line no-undef
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)));
