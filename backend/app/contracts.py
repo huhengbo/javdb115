@@ -9,7 +9,6 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    token: str
     username: str
 
 
@@ -85,6 +84,7 @@ class SettingItem(BaseModel):
     key: str
     value: str | None
     is_secret: bool = False
+    configured: bool = False
 
 
 class SettingsUpdate(BaseModel):

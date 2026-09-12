@@ -67,6 +67,7 @@ export type SettingItem = {
   key: string;
   value: string | null;
   is_secret: boolean;
+  configured?: boolean;
 };
 
 export type TelegramTestResult = {

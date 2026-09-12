@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from sqlite3 import Connection
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, Response
 
 from app.adapters.javdb_api import JavdbApiClient
 from app.api import auth, checks, follows, health, image_proxy, javdb_proxy, settings, tasks
@@ -160,6 +160,23 @@ async def lifespan(app: FastAPI) -> Any:
 
 app = FastAPI(title="JAVDB 115 Tool", lifespan=lifespan)
 app.add_exception_handler(AppError, app_error_handler)
+
+
+@app.middleware("http")
+async def add_security_headers(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if request.url.path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
+
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(follows.router)

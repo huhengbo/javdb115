@@ -26,6 +26,7 @@ export function CookieField(props: FieldProps) {
     <TextAreaField
       fieldKey="p115_cookie"
       label="115 Cookie"
+      placeholder="输入新值以设置或覆盖现有 Cookie"
       rowsClassName="min-h-24"
       values={props.values}
       onChange={props.onChange}
@@ -39,6 +40,7 @@ export function TelegramFields(props: FieldProps) {
       <TextAreaField
         fieldKey="telegram_bot_token"
         label="Bot Token"
+        placeholder="输入新值以设置或覆盖现有 Token"
         rowsClassName="min-h-16"
         values={props.values}
         onChange={props.onChange}
@@ -85,15 +87,22 @@ type FilterRules = {
   readonly excluded_keywords: string[];
 };
 
-function TextAreaField(props: FieldProps & { readonly fieldKey: string; readonly label: string; readonly rowsClassName: string }) {
+function TextAreaField(props: FieldProps & {
+  readonly fieldKey: string;
+  readonly label: string;
+  readonly placeholder?: string;
+  readonly rowsClassName: string;
+}) {
   return (
     <label className="block">
       <span className="text-sm font-medium text-ink">{props.label}</span>
       <textarea
         className={`mt-2 w-full rounded-md border border-line px-3 py-2 text-sm ${props.rowsClassName}`}
         onChange={(event) => props.onChange(props.fieldKey, event.target.value)}
+        placeholder={props.placeholder}
         value={props.values[props.fieldKey] ?? ''}
       />
+      {props.placeholder ? <span className="mt-1 block text-xs text-slate-500">敏感值不会从服务器回显；留空保存会保持现有值。</span> : null}
     </label>
   );
 }

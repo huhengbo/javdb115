@@ -33,14 +33,30 @@ def test_public_settings_include_defaults_and_hide_obsolete_keys(tmp_path: Path)
     assert "javdb_cookie" not in settings
 
 
-def test_public_settings_reveal_p115_cookie(tmp_path: Path) -> None:
+def test_public_settings_hide_p115_cookie_and_report_configured(tmp_path: Path) -> None:
     connection = setup_database(tmp_path).connect()
     repository = SettingsRepository(connection)
-    repository.upsert("p115_cookie", "UID=abc;", True)
+    repository.upsert("p115_cookie", "UID=abc;", False)
 
     settings = by_key(SettingsService(repository).list_public())
 
-    assert settings["p115_cookie"]["value"] == "UID=abc;"
+    assert settings["p115_cookie"]["value"] is None
+    assert settings["p115_cookie"]["configured"] is True
+    assert settings["p115_cookie"]["is_secret"] is True
+
+
+def test_blank_secret_update_preserves_existing_value(tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("telegram_bot_token", "existing-token", False)
+
+    SettingsService(repository).update([("telegram_bot_token", "", False)])
+
+    assert repository.get("telegram_bot_token") == "existing-token"
+    settings = by_key(SettingsService(repository).list_public())
+    assert settings["telegram_bot_token"]["value"] is None
+    assert settings["telegram_bot_token"]["configured"] is True
+    assert settings["telegram_bot_token"]["is_secret"] is True
 
 
 def test_update_ignores_obsolete_javdb_settings(tmp_path: Path) -> None:

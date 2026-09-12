@@ -35,11 +35,7 @@ def update_settings(
     payload: SettingsUpdate,
     connection: Connection = Depends(get_connection),
 ) -> dict[str, bool]:
-    items = [
-        (item.key, item.value or "", item.is_secret)
-        for item in payload.items
-        if not (item.is_secret and not item.value)
-    ]
+    items = [(item.key, item.value or "", item.is_secret) for item in payload.items]
     SettingsService(SettingsRepository(connection)).update(items)
     return {"ok": True}
 
