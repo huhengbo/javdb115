@@ -63,7 +63,7 @@ export function TasksPage() {
       if (activeFilterRef.current !== requestedFilter) return;
       const nextTasks = initial || replace
         ? payload.items
-        : mergeLatestTasks(payload.items, tasksRef.current);
+        : mergeRefreshedRange(payload.items, tasksRef.current);
       tasksRef.current = nextTasks;
       setTasks(nextTasks);
       setFilterCounts(payload.counts);
@@ -197,9 +197,14 @@ function FilterBar(props: { readonly activeFilter: TaskFilterValue; readonly cou
   );
 }
 
-function mergeLatestTasks(latest: Task[], current: Task[]): Task[] {
+function mergeRefreshedRange(latest: Task[], current: Task[]): Task[] {
+  if (latest.length === 0) return [];
   const latestIds = new Set(latest.map((task) => task.id));
-  return [...latest, ...current.filter((task) => !latestIds.has(task.id))];
+  const refreshedBoundary = latest[latest.length - 1].id;
+  const olderLoadedTasks = current.filter(
+    (task) => task.id < refreshedBoundary && !latestIds.has(task.id)
+  );
+  return [...latest, ...olderLoadedTasks];
 }
 
 function appendUniqueTasks(current: Task[], incoming: Task[]): Task[] {
