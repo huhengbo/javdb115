@@ -24,6 +24,7 @@ type DetailHistoryState = {
 };
 
 const DETAIL_HISTORY_MARKER = '__javdb115DetailHistory';
+export const APP_TAB_CHANGE_EVENT = 'javdb115:tab-change';
 
 function isDetailHistoryState(state: unknown, scope: string): state is DetailHistoryState {
   return Boolean(
@@ -51,11 +52,15 @@ export function useDetailHistory(scope: string) {
   const [selectedActor, setSelectedActor] = useState<SelectedActor | null>(null);
   const [activeOverlayKind, setActiveOverlayKind] = useState<ActiveOverlayKind>(null);
 
+  const clearOverlay = useCallback(() => {
+    setSelectedMovie(null);
+    setSelectedActor(null);
+    setActiveOverlayKind(null);
+  }, []);
+
   const applyOverlay = useCallback((overlay: DetailOverlay | null) => {
     if (!overlay) {
-      setSelectedMovie(null);
-      setSelectedActor(null);
-      setActiveOverlayKind(null);
+      clearOverlay();
       return;
     }
     if (overlay.kind === 'movie') {
@@ -67,7 +72,7 @@ export function useDetailHistory(scope: string) {
     setSelectedMovie((current) => movieBackingLayer(current, overlay.payload.parentMovie));
     setSelectedActor(overlay.payload);
     setActiveOverlayKind('actor');
-  }, []);
+  }, [clearOverlay]);
 
   const pushOverlay = useCallback(
     (overlay: DetailOverlay) => {
@@ -89,16 +94,20 @@ export function useDetailHistory(scope: string) {
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       if (!isDetailHistoryState(event.state, scope)) {
-        setSelectedMovie(null);
-        setSelectedActor(null);
-        setActiveOverlayKind(null);
+        clearOverlay();
         return;
       }
       applyOverlay(event.state.overlay);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [applyOverlay, scope]);
+  }, [applyOverlay, clearOverlay, scope]);
+
+  useEffect(() => {
+    const handleTabChange = () => clearOverlay();
+    window.addEventListener(APP_TAB_CHANGE_EVENT, handleTabChange);
+    return () => window.removeEventListener(APP_TAB_CHANGE_EVENT, handleTabChange);
+  }, [clearOverlay]);
 
   const openMovie = useCallback(
     (movieId: string, parentActor: ActorRef | null = null) => {
