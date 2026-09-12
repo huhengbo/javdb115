@@ -29,7 +29,10 @@ export default function App() {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set([initialTab]));
   const [settingsDirty, setSettingsDirty] = useState(false);
+  const [javdbLoginRequestId, setJavdbLoginRequestId] = useState(0);
+  const [rankingsKey, setRankingsKey] = useState(0);
   const scrollPositions = useRef<Partial<Record<Tab, number>>>({ [initialTab]: window.scrollY });
+  const javdbReturnTab = useRef<Tab | null>(null);
 
   const logout = useCallback(() => {
     if (!window.confirm('确认退出当前登录？')) return;
@@ -59,6 +62,20 @@ export default function App() {
 
   const changeTab = useCallback((nextTab: Tab) => {
     applyTab(nextTab, true);
+  }, [applyTab]);
+
+  const openJavdbLogin = useCallback(() => {
+    javdbReturnTab.current = tab;
+    setJavdbLoginRequestId((current) => current + 1);
+    applyTab('settings', true);
+  }, [applyTab, tab]);
+
+  const handleJavdbAuthChanged = useCallback((authenticated: boolean) => {
+    setRankingsKey((current) => current + 1);
+    if (!authenticated) return;
+    const returnTab = javdbReturnTab.current;
+    javdbReturnTab.current = null;
+    if (returnTab && returnTab !== 'settings') applyTab(returnTab, true);
   }, [applyTab]);
 
   useEffect(() => {
@@ -103,10 +120,18 @@ export default function App() {
 
   return (
     <MovieDetailNavigator scope="global-task-movies">
-      <AppShell active={tab} onChange={changeTab} onLogout={logout} onOpenSettings={() => changeTab('settings')}>
+      <AppShell
+        active={tab}
+        javdbLoginRequestId={javdbLoginRequestId}
+        onChange={changeTab}
+        onJavdbAuthChanged={handleJavdbAuthChanged}
+        onLogout={logout}
+        onOpenJavdbLogin={openJavdbLogin}
+        onOpenSettings={() => changeTab('settings')}
+      >
         <TabPanel active={tab === 'dashboard'} mounted={visitedTabs.has('dashboard')}><DashboardPage onOpenSettings={() => changeTab('settings')} onOpenTasks={() => changeTab('tasks')} /></TabPanel>
         <TabPanel active={tab === 'discovery'} mounted={visitedTabs.has('discovery')}><DiscoveryPage /></TabPanel>
-        <TabPanel active={tab === 'rankings'} mounted={visitedTabs.has('rankings')}><RankingsPage /></TabPanel>
+        <TabPanel active={tab === 'rankings'} mounted={visitedTabs.has('rankings')}><RankingsPage key={rankingsKey} /></TabPanel>
         <TabPanel active={tab === 'following'} mounted={visitedTabs.has('following')}><FollowingPage /></TabPanel>
         <TabPanel active={tab === 'tasks'} mounted={visitedTabs.has('tasks')}><TasksPage /></TabPanel>
         <TabPanel active={tab === 'settings'} mounted={visitedTabs.has('settings')}><SettingsPage /></TabPanel>
