@@ -1,7 +1,10 @@
 import { access, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { stdout } from 'node:process';
+import { fileURLToPath } from 'node:url';
 
-const distDir = new URL('../dist/', import.meta.url).pathname;
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const distDir = join(scriptDir, '..', 'dist');
 const requiredFiles = [
   'manifest.webmanifest',
   'sw.js',
@@ -33,4 +36,4 @@ if (!icons.some((icon) => String(icon.purpose ?? '').split(/\s+/).includes('mask
   throw new Error('PWA manifest must include a maskable icon');
 }
 
-console.log('PWA build artifacts verified');
+stdout.write('PWA build artifacts verified\n');
