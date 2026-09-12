@@ -6,21 +6,22 @@ from typing import Any, cast
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 
-from app.adapters.javdb_api import JavdbApiClient
+from app.adapters.javdb_api import JavdbApiClient, client_from_token
 from app.config import load_config
 from app.contracts import FollowCreate, FollowOut, FollowUpdate
 from app.database import Database
-from app.dependencies import get_connection, require_user
+from app.dependencies import get_connection, get_javdb_client, require_user
 from app.errors import NotFoundError
 from app.repositories.follows import FollowsRepository
+from app.repositories.settings import SettingsRepository
 from app.services.follows import FollowsService
 
 router = APIRouter(prefix="/api/follows", tags=["follows"], dependencies=[Depends(require_user)])
 LOGGER = logging.getLogger(__name__)
 
 
-def get_api_client() -> JavdbApiClient:
-    return JavdbApiClient()
+def get_api_client(client: JavdbApiClient = Depends(get_javdb_client)) -> JavdbApiClient:
+    return client
 
 
 @router.get("", response_model=list[FollowOut])
@@ -89,7 +90,8 @@ def run_baseline_task(follow_id: int) -> None:
             LOGGER.warning("Follow baseline skipped for missing follow %s", follow_id)
             return
         try:
-            FollowsService(repository, JavdbApiClient()).baseline(follow)
+            token = SettingsRepository(connection).get("javdb_token")
+            FollowsService(repository, client_from_token(token)).baseline(follow)
             connection.commit()
         except Exception:
             connection.rollback()

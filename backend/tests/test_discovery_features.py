@@ -85,6 +85,8 @@ def test_movie_detail_normalizes_nullable_collections_from_javdb() -> None:
     assert detail["preview_images"] == []
     assert detail["relative_movies"] == []
     assert detail["actor_movies"] == []
+    assert detail["play_sources"] == []
+    assert detail["top_rankings"] == []
 
 
 def test_follows_repository_upserts_actor_rule(tmp_path: Path) -> None:
@@ -237,6 +239,39 @@ def test_actor_movies_maps_magnet_tag_to_app_filter() -> None:
     assert client.detail_calls == []
 
 
+def test_movie_detail_keeps_preview_and_play_fields() -> None:
+    class PreviewTransport:
+        def javdb_api_get(self, path: str, query: str, sig: str) -> str:
+            del query, sig
+            assert path == "/api/v4/movies/movie-1"
+            return json.dumps(
+                {
+                    "data": {
+                        "movie": {
+                            "id": "movie-1",
+                            "has_preview_video": 1,
+                            "preview_video_url": "https://jdforrepam.com/api/v1/movies/ttm3u8/preview/1/0/720p.m3u8",
+                            "play_sources": [{"id": 4, "name": "播放源4"}],
+                            "preview_images": None,
+                            "actors": [],
+                            "tags": [],
+                            "relative_movies": [{"id": "rel-1", "preview_images": None}],
+                            "actor_movies": None,
+                        }
+                    }
+                }
+            )
+
+    detail = JavdbApiClient(cast(Any, PreviewTransport())).movie_detail("movie-1")
+
+    assert detail["has_preview_video"] is True
+    assert detail["preview_video_url"].endswith("720p.m3u8")
+    assert detail["play_sources"] == [{"id": 4, "name": "播放源4"}]
+    assert detail["preview_images"] == []
+    assert detail["relative_movies"] == [{"id": "rel-1", "preview_images": []}]
+    assert detail["actor_movies"] == []
+
+
 def test_rankings_forwards_app_query_parameters() -> None:
     browser = ApiCaptureBrowser()
     client = JavdbApiClient(cast(Any, browser))
@@ -301,7 +336,7 @@ def test_movies_top_rejects_login_required_response() -> None:
     try:
         client.movies_top()
     except IntegrationError as exc:
-        assert "公开接口" in exc.message
+        assert "JavDB 登录" in exc.message
         return
     raise AssertionError("expected IntegrationError")
 

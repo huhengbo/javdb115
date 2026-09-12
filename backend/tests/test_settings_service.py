@@ -45,6 +45,18 @@ def test_public_settings_hide_p115_cookie_and_report_configured(tmp_path: Path) 
     assert settings["p115_cookie"]["is_secret"] is True
 
 
+def test_public_settings_hide_javdb_token_and_report_configured(tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("javdb_token", "jwt-token", False)
+
+    settings = by_key(SettingsService(repository).list_public())
+
+    assert settings["javdb_token"]["value"] is None
+    assert settings["javdb_token"]["configured"] is True
+    assert settings["javdb_token"]["is_secret"] is True
+
+
 def test_blank_secret_update_preserves_existing_value(tmp_path: Path) -> None:
     connection = setup_database(tmp_path).connect()
     repository = SettingsRepository(connection)

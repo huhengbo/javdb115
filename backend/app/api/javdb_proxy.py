@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.adapters.javdb_api import JavdbApiClient
 from app.contracts import ManualOfflineRequest, ManualOfflineResponse, MovieBundleOut, TaskOut
-from app.dependencies import get_connection, require_user
+from app.dependencies import get_connection, get_javdb_client, require_user
 from app.repositories.actors import ActorsRepository
 from app.repositories.catalog import CatalogRepository
 from app.repositories.logs import LogsRepository
@@ -19,8 +19,8 @@ from app.services.manual_offline import ManualOfflineDependencies, ManualOffline
 router = APIRouter(prefix="/api/javdb", tags=["javdb"], dependencies=[Depends(require_user)])
 
 
-def get_client() -> JavdbApiClient:
-    return JavdbApiClient()
+def get_client(client: JavdbApiClient = Depends(get_javdb_client)) -> JavdbApiClient:
+    return client
 
 
 @router.get("/movies/latest")

@@ -6,7 +6,7 @@ import sqlite3
 from app.secret_store import decrypt_secret, encrypt_secret, is_encrypted_secret
 from app.security import iso_now
 
-SECRET_KEYS = frozenset({"p115_cookie", "telegram_bot_token"})
+SECRET_KEYS = frozenset({"p115_cookie", "telegram_bot_token", "javdb_token"})
 OBSOLETE_KEYS = {"javdb_base_url", "javdb_cookie"}
 
 

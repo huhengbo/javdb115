@@ -59,6 +59,8 @@ def test_dashboard_status_reports_javdb_access_health(tmp_path: Path) -> None:
     javdb_status = cast(dict[str, Any], status["javdb"])
 
     assert javdb_status["ok"] is True
+    assert javdb_status["configured"] is False
+    assert javdb_status["account"] is None
     assert javdb_status["message"] == "JAVDB App API 可访问"
 
 

@@ -8,7 +8,7 @@ from pathlib import Path
 from sqlite3 import Connection
 from typing import Protocol, TypeVar
 
-from app.adapters.javdb_api import JavdbApiClient
+from app.adapters.javdb_api import JavdbApiClient, client_from_token
 from app.adapters.telegram import TelegramBotVerifier
 from app.database import Database
 from app.repositories.actors import ActorsRepository
@@ -125,15 +125,21 @@ class TelegramMovieJobRunner:
             return result
 
     def _service(self, connection: Connection) -> TelegramMovieService:
+        settings = SettingsRepository(connection)
+        javdb = (
+            client_from_token(settings.get("javdb_token"))
+            if self.javdb_factory is JavdbApiClient
+            else self.javdb_factory()
+        )
         return TelegramMovieService(
             TelegramMovieDependencies(
                 actors=ActorsRepository(connection),
                 catalog=CatalogRepository(connection),
                 follows=FollowsRepository(connection),
                 logs=LogsRepository(connection),
-                settings=SettingsRepository(connection),
+                settings=settings,
                 tasks=TasksRepository(connection),
-                javdb=self.javdb_factory(),
+                javdb=javdb,
             )
         )
 
