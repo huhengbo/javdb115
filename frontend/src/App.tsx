@@ -33,6 +33,7 @@ export default function App() {
   const [rankingsKey, setRankingsKey] = useState(0);
   const scrollPositions = useRef<Partial<Record<Tab, number>>>({ [initialTab]: window.scrollY });
   const javdbReturnTab = useRef<Tab | null>(null);
+  const javdbReturnPath = useRef<string | null>(null);
 
   const logout = useCallback(() => {
     if (!window.confirm('确认退出当前登录？')) return;
@@ -66,6 +67,7 @@ export default function App() {
 
   const openJavdbLogin = useCallback(() => {
     javdbReturnTab.current = tab;
+    javdbReturnPath.current = `${window.location.pathname}${window.location.search}`;
     setJavdbLoginRequestId((current) => current + 1);
     applyTab('settings', true);
   }, [applyTab, tab]);
@@ -74,8 +76,12 @@ export default function App() {
     setRankingsKey((current) => current + 1);
     if (!authenticated) return;
     const returnTab = javdbReturnTab.current;
+    const returnPath = javdbReturnPath.current;
     javdbReturnTab.current = null;
-    if (returnTab && returnTab !== 'settings') applyTab(returnTab, true);
+    javdbReturnPath.current = null;
+    if (returnTab && returnTab !== 'settings' && applyTab(returnTab, true) && returnPath) {
+      window.history.replaceState({}, '', returnPath);
+    }
   }, [applyTab]);
 
   useEffect(() => {
