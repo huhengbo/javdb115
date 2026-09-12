@@ -23,8 +23,8 @@ if (manifest.name !== 'JAVDB 115') {
 if (manifest.display !== 'standalone') {
   throw new Error('PWA manifest must use standalone display mode');
 }
-if (manifest.start_url !== '/') {
-  throw new Error('PWA manifest start_url must be /');
+if (manifest.start_url !== '/' || manifest.scope !== '/') {
+  throw new Error('PWA manifest start_url and scope must be /');
 }
 
 const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
@@ -34,6 +34,17 @@ if (!sizes.has('192x192') || !sizes.has('512x512')) {
 }
 if (!icons.some((icon) => String(icon.purpose ?? '').split(/\s+/).includes('maskable'))) {
   throw new Error('PWA manifest must include a maskable icon');
+}
+
+const serviceWorker = await readFile(join(distDir, 'sw.js'), 'utf8');
+if (serviceWorker.includes('__PWA_BUILD_ID__') || serviceWorker.includes('__PWA_ASSET_LIST__')) {
+  throw new Error('PWA service worker was not stamped');
+}
+if (!serviceWorker.includes("url.pathname.startsWith('/api/')")) {
+  throw new Error('PWA service worker must bypass /api requests');
+}
+if (!serviceWorker.includes('/assets/')) {
+  throw new Error('PWA service worker must precache built frontend assets');
 }
 
 stdout.write('PWA build artifacts verified\n');
