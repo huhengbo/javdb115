@@ -1,5 +1,7 @@
 import { Activity, Compass, Heart, Home, LogOut, Settings, Trophy } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { PwaInstallPanel } from './PwaInstallPanel';
+import { PwaUpdatePrompt } from './PwaUpdatePrompt';
 
 type Tab = 'dashboard' | 'discovery' | 'rankings' | 'following' | 'tasks' | 'settings';
 
@@ -20,9 +22,11 @@ const tabs = [
 ];
 
 export function AppShell({ active, onChange, onLogout, onOpenSettings, children }: Props) {
+  const online = useOnlineStatus();
+
   return (
-    <div className="min-h-dvh bg-mist pb-20">
-      <header className="sticky top-0 z-10 border-b border-line bg-white/95 backdrop-blur">
+    <div className="min-h-dvh bg-mist pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      <header className="sticky top-0 z-30 border-b border-line bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex h-12 max-w-3xl items-center justify-between px-4">
           <span className="text-sm font-medium text-ink">JAVDB 115</span>
           <div className="flex items-center gap-1">
@@ -47,14 +51,26 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-3xl px-4 py-4">{children}</main>
-      <nav className="fixed inset-x-0 bottom-0 border-t border-line bg-white/95 backdrop-blur">
+      {!online ? (
+        <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-800" role="status">
+          当前离线，115、任务和设置操作暂不可用。
+        </p>
+      ) : null}
+      <main className="mx-auto w-full max-w-3xl px-4 py-4">
+        {active === 'settings' ? <PwaInstallPanel /> : null}
+        {children}
+      </main>
+      <nav
+        aria-label="主导航"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+      >
         <div className="mx-auto grid h-16 max-w-3xl grid-cols-5">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const selected = active === tab.id;
             return (
               <button
+                aria-current={selected ? 'page' : undefined}
                 key={tab.id}
                 className={`flex min-h-12 flex-col items-center justify-center gap-1 text-xs ${
                   selected ? 'text-brand' : 'text-slate-500'
@@ -69,6 +85,24 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
           })}
         </div>
       </nav>
+      <PwaUpdatePrompt />
     </div>
   );
+}
+
+function useOnlineStatus() {
+  const [online, setOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const markOnline = () => setOnline(true);
+    const markOffline = () => setOnline(false);
+    window.addEventListener('online', markOnline);
+    window.addEventListener('offline', markOffline);
+    return () => {
+      window.removeEventListener('online', markOnline);
+      window.removeEventListener('offline', markOffline);
+    };
+  }, []);
+
+  return online;
 }

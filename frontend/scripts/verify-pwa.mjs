@@ -1,0 +1,50 @@
+import { access, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { stdout } from 'node:process';
+import { fileURLToPath } from 'node:url';
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const distDir = join(scriptDir, '..', 'dist');
+const requiredFiles = [
+  'manifest.webmanifest',
+  'sw.js',
+  'pwa-192x192.png',
+  'pwa-512x512.png',
+  'pwa-maskable-512x512.png',
+  'apple-touch-icon.png'
+];
+
+await Promise.all(requiredFiles.map((file) => access(join(distDir, file))));
+
+const manifest = JSON.parse(await readFile(join(distDir, 'manifest.webmanifest'), 'utf8'));
+if (manifest.name !== 'JAVDB 115') {
+  throw new Error('PWA manifest name is invalid');
+}
+if (manifest.display !== 'standalone') {
+  throw new Error('PWA manifest must use standalone display mode');
+}
+if (manifest.start_url !== '/' || manifest.scope !== '/') {
+  throw new Error('PWA manifest start_url and scope must be /');
+}
+
+const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
+const sizes = new Set(icons.map((icon) => icon.sizes));
+if (!sizes.has('192x192') || !sizes.has('512x512')) {
+  throw new Error('PWA manifest must include 192x192 and 512x512 icons');
+}
+if (!icons.some((icon) => String(icon.purpose ?? '').split(/\s+/).includes('maskable'))) {
+  throw new Error('PWA manifest must include a maskable icon');
+}
+
+const serviceWorker = await readFile(join(distDir, 'sw.js'), 'utf8');
+if (serviceWorker.includes('__PWA_BUILD_ID__') || serviceWorker.includes('__PWA_ASSET_LIST__')) {
+  throw new Error('PWA service worker was not stamped');
+}
+if (!serviceWorker.includes("url.pathname.startsWith('/api/')")) {
+  throw new Error('PWA service worker must bypass /api requests');
+}
+if (!serviceWorker.includes('/assets/')) {
+  throw new Error('PWA service worker must precache built frontend assets');
+}
+
+stdout.write('PWA build artifacts verified\n');

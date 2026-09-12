@@ -30,12 +30,16 @@ export default function App() {
   }, []);
 
   const changeTab = useCallback((nextTab: Tab) => {
+    if (tab === nextTab) {
+      window.scrollTo({ top: 0 });
+      return;
+    }
     const nextPath = TAB_PATHS[nextTab];
     setTab(nextTab);
     if (window.location.pathname !== nextPath) {
       window.history.pushState({}, '', nextPath);
     }
-  }, []);
+  }, [tab]);
 
   useEffect(() => {
     void currentUser()
