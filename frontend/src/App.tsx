@@ -45,7 +45,7 @@ export default function App() {
     if (tab === 'settings' && settingsDirty && !window.confirm('设置尚未保存，确认离开并保留当前草稿吗？')) {
       return false;
     }
-    window.dispatchEvent(new Event(APP_TAB_CHANGE_EVENT));
+    if (pushHistory) window.dispatchEvent(new Event(APP_TAB_CHANGE_EVENT));
     scrollPositions.current[tab] = window.scrollY;
     setVisitedTabs((current) => new Set(current).add(nextTab));
     setTab(nextTab);
