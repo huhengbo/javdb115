@@ -53,6 +53,18 @@ export function imgUrl(url: string): string {
   return url;
 }
 
+export function movieIdFromSourceUrl(sourceUrl: string | null | undefined): string | null {
+  if (!sourceUrl) return null;
+  try {
+    const pathname = new URL(sourceUrl, window.location.origin).pathname;
+    const match = pathname.match(/\/v\/([^/?#]+)/);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  } catch {
+    const match = sourceUrl.match(/\/v\/([^/?#]+)/);
+    return match?.[1] ? decodeURIComponent(match[1]) : null;
+  }
+}
+
 export function formatMagnetSize(sizeMb: number): string {
   const bytes = sizeMb * BYTES_PER_MB;
   if (bytes >= BYTES_PER_GB) {
