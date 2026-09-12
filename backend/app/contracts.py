@@ -9,7 +9,6 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    token: str
     username: str
 
 
@@ -85,6 +84,7 @@ class SettingItem(BaseModel):
     key: str
     value: str | None
     is_secret: bool = False
+    configured: bool = False
 
 
 class SettingsUpdate(BaseModel):
@@ -181,57 +181,14 @@ class DashboardStats(BaseModel):
     failed: int
 
 
-class TaskBreakdown(BaseModel):
-    by_status: dict[str, int] = Field(default_factory=dict)
-    by_stage: dict[str, int] = Field(default_factory=dict)
-    attention: int = 0
-
-
-class P115AccountOut(BaseModel):
-    user_id: str | None = None
-    user_name: str | None = None
-    vip_label: str | None = None
-    vip_expires_at: str | None = None
-    space_total: str | None = None
-    space_used: str | None = None
-    space_remaining: str | None = None
-
-
-class P115QrStatusResponse(BaseModel):
-    session_id: str
-    status: str
-    message: str
-    account: P115AccountOut | None = None
-
-
-class P115StatusOut(BaseModel):
-    configured: bool
-    ok: bool
-    message: str
-    checked_at: str | None = None
-    account: P115AccountOut | None = None
-
-
-class JavdbStatusOut(BaseModel):
-    ok: bool
-    message: str
-    checked_at: str
-
-
-class ConnectionStatusOut(BaseModel):
-    p115: P115StatusOut
-    javdb: JavdbStatusOut
-
-
 class DashboardOut(BaseModel):
     stats: DashboardStats
-    task_breakdown: TaskBreakdown
-    connections: ConnectionStatusOut
-    attention_tasks: list[TaskOut] = Field(default_factory=list)
     recent_tasks: list[TaskOut]
 
 
-class FilterRules(BaseModel):
-    min_size_gb: float = Field(default=0, ge=0)
-    required_keywords: list[str] = Field(default_factory=list)
-    excluded_keywords: list[str] = Field(default_factory=list)
+class FollowCheckResultOut(BaseModel):
+    follow_id: int
+    checked: int
+    submitted: int
+    skipped: int
+    errors: int
