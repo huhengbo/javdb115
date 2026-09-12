@@ -1,4 +1,4 @@
-/* global window, document, localStorage */
+/* global window */
 (() => {
   const valid = new Set(['system', 'harbor', 'graphite', 'paper', 'blueprint']);
   let preference = 'system';
