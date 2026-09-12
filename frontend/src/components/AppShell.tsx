@@ -37,7 +37,7 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
   const usesLegacyPageHeading = active === 'settings';
 
   return (
-    <div className={`min-h-dvh bg-mist ${keyboardVisible ? 'pb-0' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom))]'}`}>
+    <div className={`min-h-dvh bg-mist ${keyboardVisible ? 'pb-0' : 'pb-[calc(4rem+env(safe-area-inset-bottom))]'}`}>
       <header className="sticky top-0 z-40 border-b border-line bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <div className="min-w-0">
@@ -57,7 +57,7 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
       </main>
       {!keyboardVisible ? (
         <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-50 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
-          <div className="mx-auto grid h-[4.5rem] max-w-3xl grid-cols-5 gap-1 px-2 py-1.5">
+          <div className="mx-auto grid h-16 max-w-3xl grid-cols-5 gap-1 px-2 py-1.5">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const selected = active === tab.id;
