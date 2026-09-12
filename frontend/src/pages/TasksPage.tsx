@@ -1,7 +1,8 @@
-import { Loader2, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Loader2, RefreshCw, SlidersHorizontal, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { client } from '../api';
 import { TaskList } from '../components/TaskList';
+import { FilterChip, InlineAlert } from '../components/ui';
 import { formatDateTime } from '../lib/tasks';
 import type { Task, TaskFilterValue } from '../types';
 
@@ -25,9 +26,9 @@ const TASK_FILTERS: readonly TaskFilter[] = [
   { value: 'organize_failed', label: '整理失败' },
   { value: 'incomplete_submit', label: '提交未完成' }
 ] as const;
-const EMPTY_COUNTS = Object.fromEntries(
-  TASK_FILTERS.map((filter) => [filter.value, 0])
-) as Record<TaskFilterValue, number>;
+const PRIMARY_FILTERS = new Set<TaskFilterValue>(['all', 'attention', 'completed']);
+const PROGRESS_FILTERS = new Set<TaskFilterValue>(['submitted', 'downloading', 'organizing']);
+const EMPTY_COUNTS = Object.fromEntries(TASK_FILTERS.map((filter) => [filter.value, 0])) as Record<TaskFilterValue, number>;
 
 export function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -42,6 +43,7 @@ export function TasksPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [filterSheet, setFilterSheet] = useState<'progress' | 'more' | null>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
   const tasksRef = useRef<Task[]>([]);
   const activeFilterRef = useRef<TaskFilterValue>(activeFilter);
@@ -55,15 +57,11 @@ export function TasksPage() {
     else setRefreshing(true);
     setError(null);
     const requestedFilter = activeFilter;
-    const visibleLimit = initial
-      ? PAGE_SIZE
-      : Math.min(Math.max(tasksRef.current.length, PAGE_SIZE), MAX_REFRESH_LIMIT);
+    const visibleLimit = initial ? PAGE_SIZE : Math.min(Math.max(tasksRef.current.length, PAGE_SIZE), MAX_REFRESH_LIMIT);
     try {
       const payload = await client.tasks(requestedFilter, null, visibleLimit);
       if (activeFilterRef.current !== requestedFilter) return;
-      const nextTasks = initial || replace
-        ? payload.items
-        : mergeRefreshedRange(payload.items, tasksRef.current);
+      const nextTasks = initial || replace ? payload.items : mergeRefreshedRange(payload.items, tasksRef.current);
       tasksRef.current = nextTasks;
       setTasks(nextTasks);
       setFilterCounts(payload.counts);
@@ -127,83 +125,78 @@ export function TasksPage() {
   useEffect(() => {
     const element = loaderRef.current;
     if (!element) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting || !hasMore || loadingMore || loadMoreError || initialLoading || refreshing) return;
-        void loadMore();
-      },
-      { threshold: 0.1 }
-    );
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting || !hasMore || loadingMore || loadMoreError || initialLoading || refreshing) return;
+      void loadMore();
+    }, { rootMargin: '320px 0px', threshold: 0.01 });
     observer.observe(element);
     return () => observer.disconnect();
   }, [hasMore, initialLoading, loadMore, loadMoreError, loadingMore, refreshing]);
 
+  const activeLabel = useMemo(() => TASK_FILTERS.find((item) => item.value === activeFilter)?.label ?? '全部', [activeFilter]);
+  const progressCount = filterCounts.submitted + filterCounts.downloading + filterCounts.organizing;
+
+  function selectFilter(value: TaskFilterValue) {
+    setActiveFilter(value);
+    setFilterSheet(null);
+  }
+
   return (
     <section>
-      <TasksHeader
-        lastRefreshedAt={lastRefreshedAt}
-        refreshing={refreshing}
-        onRefresh={() => void refresh(false, true)}
-      />
-      <FilterBar activeFilter={activeFilter} counts={filterCounts} onChange={setActiveFilter} />
-      {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger" role="alert">{error}</p> : null}
-      {initialLoading ? (
-        <p className="mt-4 flex min-h-24 items-center justify-center gap-2 rounded-lg border border-line bg-white text-sm text-slate-500" aria-live="polite"><Loader2 className="animate-spin" size={18} />任务加载中...</p>
-      ) : (
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-slate-500">{activeLabel} · {total} 条</p>
+          <p className="mt-0.5 text-xs text-slate-400">每分钟自动刷新 · {formatDateTime(lastRefreshedAt)}</p>
+        </div>
+        <button aria-label="刷新任务列表" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-line disabled:opacity-50" disabled={refreshing} onClick={() => void refresh(false, true)} type="button"><RefreshCw className={refreshing ? 'animate-spin' : ''} size={18} /></button>
+      </div>
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        <FilterChip selected={activeFilter === 'all'} onClick={() => selectFilter('all')}>全部 {filterCounts.all}</FilterChip>
+        <FilterChip selected={activeFilter === 'attention'} onClick={() => selectFilter('attention')}>需处理 {filterCounts.attention}</FilterChip>
+        <FilterChip selected={PROGRESS_FILTERS.has(activeFilter)} onClick={() => setFilterSheet('progress')}>进行中 {progressCount}</FilterChip>
+        <FilterChip selected={activeFilter === 'completed'} onClick={() => selectFilter('completed')}>已完成 {filterCounts.completed}</FilterChip>
+        <button className={`filter-chip flex items-center gap-1 ${!PRIMARY_FILTERS.has(activeFilter) && !PROGRESS_FILTERS.has(activeFilter) ? 'filter-chip-selected' : ''}`} onClick={() => setFilterSheet('more')} type="button"><SlidersHorizontal size={14} />更多</button>
+      </div>
+      {error ? <InlineAlert className="mt-3" tone="danger">{error}</InlineAlert> : null}
+      {initialLoading ? <TaskSkeleton /> : (
         <>
-          <p className="mt-3 text-xs text-slate-500">当前显示 {tasks.length} / {total} 条任务{refreshing ? ' · 正在刷新' : ''}</p>
+          {refreshing ? <p className="mt-3 text-xs text-slate-400" role="status">正在刷新当前任务状态…</p> : null}
           <div className="mt-3"><TaskList tasks={tasks} onChanged={() => void refresh(false, true)} /></div>
           <div className="mt-4 flex min-h-12 items-center justify-center" ref={loaderRef}>
-            {loadingMore ? (
-              <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} />加载中...</span>
-            ) : loadMoreError ? (
-              <button className="min-h-11 rounded-md border border-line bg-white px-4 text-sm text-ink" onClick={() => void loadMore()} type="button">加载失败，点击重试</button>
-            ) : hasMore ? (
-              <button className="min-h-11 rounded-md px-4 text-sm text-slate-500" onClick={() => void loadMore()} type="button">上滑加载更多</button>
-            ) : total > 0 ? (
-              <span className="py-3 text-xs text-slate-400">— 已加载全部 —</span>
-            ) : null}
+            {loadingMore ? <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} />加载更多任务</span> : loadMoreError ? <button className="min-h-11 rounded-xl bg-white px-4 text-sm font-medium text-ink ring-1 ring-line" onClick={() => void loadMore()} type="button">加载失败，点击重试</button> : hasMore ? <span className="py-3 text-xs text-slate-400">继续上滑加载</span> : total > 0 ? <span className="py-3 text-xs text-slate-400">已加载全部</span> : null}
           </div>
         </>
       )}
+      {filterSheet ? <FilterSheet mode={filterSheet} activeFilter={activeFilter} counts={filterCounts} onClose={() => setFilterSheet(null)} onSelect={selectFilter} /> : null}
     </section>
   );
 }
 
-function TasksHeader(props: { readonly lastRefreshedAt: string | null; readonly refreshing: boolean; readonly onRefresh: () => void }) {
+function FilterSheet(props: { readonly mode: 'progress' | 'more'; readonly activeFilter: TaskFilterValue; readonly counts: Record<TaskFilterValue, number>; readonly onClose: () => void; readonly onSelect: (value: TaskFilterValue) => void }) {
+  const filters = props.mode === 'progress'
+    ? TASK_FILTERS.filter((filter) => PROGRESS_FILTERS.has(filter.value))
+    : TASK_FILTERS.filter((filter) => !PRIMARY_FILTERS.has(filter.value));
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">任务</h1>
-        <p className="mt-1 text-sm text-slate-600">作品、磁力筛选、115 状态和整理状态</p>
-        <p className="mt-1 text-xs text-slate-400">自动刷新：1 分钟 · 上次刷新：{formatDateTime(props.lastRefreshedAt)}</p>
+    <div className="fixed inset-0 z-[70] flex items-end bg-slate-900/35" role="presentation" onClick={props.onClose}>
+      <div aria-label={props.mode === 'progress' ? '进行中筛选' : '更多任务筛选'} aria-modal="true" className="ui-surface-elevated w-full rounded-b-none p-4 pb-[max(1rem,env(safe-area-inset-bottom))]" role="dialog" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between"><h2 className="text-base font-semibold text-ink">{props.mode === 'progress' ? '进行中状态' : '更多筛选'}</h2><button aria-label="关闭筛选" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500" onClick={props.onClose} type="button"><X size={19} /></button></div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {filters.map((filter) => <button aria-pressed={props.activeFilter === filter.value} className={`min-h-12 rounded-xl px-3 text-left text-sm font-medium ${props.activeFilter === filter.value ? 'bg-teal-50 text-brand ring-1 ring-brand/20' : 'bg-slate-50 text-ink'}`} key={filter.value} onClick={() => props.onSelect(filter.value)} type="button"><span className="block">{filter.label}</span><span className="mt-0.5 block text-xs font-normal text-slate-400">{props.counts[filter.value]} 条</span></button>)}
+        </div>
       </div>
-      <button aria-label="刷新任务列表" className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-line bg-white px-3 text-slate-600 disabled:opacity-50" disabled={props.refreshing} onClick={props.onRefresh} type="button">
-        <RefreshCw className={props.refreshing ? 'animate-spin' : ''} size={18} />
-      </button>
     </div>
   );
 }
 
-function FilterBar(props: { readonly activeFilter: TaskFilterValue; readonly counts: Record<TaskFilterValue, number>; readonly onChange: (value: TaskFilterValue) => void }) {
-  return (
-    <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-      {TASK_FILTERS.map((filter) => (
-        <button aria-pressed={props.activeFilter === filter.value} className={`min-h-10 shrink-0 rounded-full px-3 text-xs font-medium ${props.activeFilter === filter.value ? 'bg-brand text-white' : 'bg-white text-slate-600 ring-1 ring-line'}`} key={filter.value} onClick={() => props.onChange(filter.value)} type="button">
-          {filter.label} {props.counts[filter.value]}
-        </button>
-      ))}
-    </div>
-  );
+function TaskSkeleton() {
+  return <div className="mt-4 space-y-3" aria-live="polite">{Array.from({ length: 4 }, (_, index) => <div className="flex gap-3 rounded-xl bg-white p-4" key={index}><div className="h-20 w-14 animate-pulse rounded-lg bg-slate-100" /><div className="flex-1"><div className="h-4 w-1/3 animate-pulse rounded bg-slate-100" /><div className="mt-3 h-3 w-full animate-pulse rounded bg-slate-100" /><div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-slate-100" /></div></div>)}</div>;
 }
 
 function mergeRefreshedRange(latest: Task[], current: Task[]): Task[] {
   if (latest.length === 0) return [];
   const latestIds = new Set(latest.map((task) => task.id));
   const refreshedBoundary = latest[latest.length - 1].id;
-  const olderLoadedTasks = current.filter(
-    (task) => task.id < refreshedBoundary && !latestIds.has(task.id)
-  );
+  const olderLoadedTasks = current.filter((task) => task.id < refreshedBoundary && !latestIds.has(task.id));
   return [...latest, ...olderLoadedTasks];
 }
 

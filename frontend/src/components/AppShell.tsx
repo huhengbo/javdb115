@@ -22,35 +22,48 @@ const tabs = [
   { id: 'tasks' as const, label: '任务', icon: Activity },
 ];
 
+const pageTitles: Record<Tab, string> = {
+  dashboard: '运行中心',
+  discovery: '发现',
+  rankings: '排行',
+  following: '关注',
+  tasks: '任务',
+  settings: '设置'
+};
+
 export function AppShell({ active, onChange, onLogout, onOpenSettings, children }: Props) {
   const online = useOnlineStatus();
   const keyboardVisible = useKeyboardVisible();
+  const usesLegacyPageHeading = active === 'settings';
 
   return (
     <div className={`min-h-dvh bg-mist ${keyboardVisible ? 'pb-0' : 'pb-[calc(4rem+env(safe-area-inset-bottom))]'}`}>
-      <header className="sticky top-0 z-30 border-b border-line bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex h-12 max-w-3xl items-center justify-between px-4">
-          <span className="text-sm font-medium text-ink">JAVDB 115</span>
+      <header className="sticky top-0 z-40 border-b border-line bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
+          <div className="min-w-0">
+            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">JAVDB 115</p>
+            {usesLegacyPageHeading ? <p className="truncate text-xs text-slate-500">配置与偏好</p> : <h1 className="truncate text-base font-semibold leading-5 text-ink">{pageTitles[active]}</h1>}
+          </div>
           <div className="flex items-center gap-1">
-            <button aria-label="打开设置" className={`flex h-11 w-11 items-center justify-center rounded-md ${active === 'settings' ? 'bg-teal-50 text-brand' : 'text-slate-500'}`} onClick={onOpenSettings} type="button"><Settings size={18} /></button>
-            <button aria-label="退出登录" className="flex h-11 w-11 items-center justify-center rounded-md text-slate-500 hover:text-danger" onClick={onLogout} type="button"><LogOut size={18} /></button>
+            <button aria-label="打开设置" className={`flex h-11 w-11 items-center justify-center rounded-full ${active === 'settings' ? 'bg-teal-50 text-brand' : 'text-slate-500 hover:bg-slate-100'}`} onClick={onOpenSettings} type="button"><Settings size={19} /></button>
+            {active === 'settings' ? <button aria-label="退出登录" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-red-50 hover:text-danger" onClick={onLogout} type="button"><LogOut size={19} /></button> : null}
           </div>
         </div>
       </header>
-      {!online ? <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-800" role="status">当前离线，115、任务和设置操作暂不可用。</p> : null}
-      <main className="mx-auto w-full max-w-3xl px-4 py-4">
-        {active === 'settings' ? <><PwaInstallPanel /><ThemePicker /></> : null}
+      {!online ? <p className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-30 bg-amber-50 px-4 py-2 text-center text-xs text-amber-800" role="status">当前离线，115、任务和设置操作暂不可用。</p> : null}
+      <main className="app-page mx-auto w-full max-w-3xl px-4 py-4 sm:py-5">
+        {active === 'settings' ? <div className="mb-5 space-y-4"><PwaInstallPanel /><ThemePicker /></div> : null}
         {children}
       </main>
       {!keyboardVisible ? (
-        <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-[80] border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
-          <div className="mx-auto grid h-16 max-w-3xl grid-cols-5">
+        <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-[80] border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
+          <div className="mx-auto grid h-16 max-w-3xl grid-cols-5 gap-1 px-2 py-1.5">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const selected = active === tab.id;
               return (
-                <button aria-current={selected ? 'page' : undefined} key={tab.id} className={`flex min-h-12 flex-col items-center justify-center gap-1 text-xs ${selected ? 'text-brand' : 'text-slate-500'}`} onClick={() => onChange(tab.id)} type="button">
-                  <Icon aria-hidden="true" size={20} /><span>{tab.label}</span>
+                <button aria-current={selected ? 'page' : undefined} key={tab.id} className={`group flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-medium ${selected ? 'bg-teal-50 text-brand' : 'text-slate-500 hover:bg-slate-100'}`} onClick={() => onChange(tab.id)} type="button">
+                  <Icon aria-hidden="true" size={20} strokeWidth={selected ? 2.4 : 2} /><span>{tab.label}</span>
                 </button>
               );
             })}

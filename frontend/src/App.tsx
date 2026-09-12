@@ -104,7 +104,7 @@ export default function App() {
   return (
     <MovieDetailNavigator scope="global-task-movies">
       <AppShell active={tab} onChange={changeTab} onLogout={logout} onOpenSettings={() => changeTab('settings')}>
-        <TabPanel active={tab === 'dashboard'} mounted={visitedTabs.has('dashboard')}><DashboardPage onOpenSettings={() => changeTab('settings')} /></TabPanel>
+        <TabPanel active={tab === 'dashboard'} mounted={visitedTabs.has('dashboard')}><DashboardPage onOpenSettings={() => changeTab('settings')} onOpenTasks={() => changeTab('tasks')} /></TabPanel>
         <TabPanel active={tab === 'discovery'} mounted={visitedTabs.has('discovery')}><DiscoveryPage /></TabPanel>
         <TabPanel active={tab === 'rankings'} mounted={visitedTabs.has('rankings')}><RankingsPage /></TabPanel>
         <TabPanel active={tab === 'following'} mounted={visitedTabs.has('following')}><FollowingPage /></TabPanel>

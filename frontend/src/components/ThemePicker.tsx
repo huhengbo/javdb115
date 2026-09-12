@@ -1,5 +1,5 @@
-import { Monitor, Moon, Palette, Sun } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Check, ChevronDown, Monitor, Moon, Palette, Sun } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { readThemePreference, setThemePreference, type ThemePreference } from '../theme';
 
 const OPTIONS: readonly { value: ThemePreference; label: string; caption: string; icon: ReactNode }[] = [
@@ -12,6 +12,8 @@ const OPTIONS: readonly { value: ThemePreference; label: string; caption: string
 
 export function ThemePicker() {
   const [value, setValue] = useState<ThemePreference>(readThemePreference);
+  const [expanded, setExpanded] = useState(false);
+  const selected = useMemo(() => OPTIONS.find((option) => option.value === value) ?? OPTIONS[0], [value]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -25,29 +27,21 @@ export function ThemePicker() {
   function choose(next: ThemePreference) {
     setValue(next);
     setThemePreference(next);
+    setExpanded(false);
   }
 
   return (
-    <section className="mb-4 rounded-lg border border-line bg-white p-4">
+    <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-line">
       <div>
         <h2 className="text-sm font-semibold text-ink">外观主题</h2>
         <p className="mt-1 text-xs text-slate-500">只保存在当前设备，不包含账号或敏感数据。</p>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {OPTIONS.map((option) => (
-          <button
-            aria-label={option.label}
-            aria-pressed={value === option.value}
-            className={`min-h-16 rounded-lg border p-3 text-left ${value === option.value ? 'border-brand bg-teal-50 ring-1 ring-brand' : 'border-line bg-white'}`}
-            key={option.value}
-            onClick={() => choose(option.value)}
-            type="button"
-          >
-            <span className="flex items-center gap-2 text-sm font-medium text-ink">{option.icon}{option.label}</span>
-            <span className="mt-1 block text-xs text-slate-500">{option.caption}</span>
-          </button>
-        ))}
-      </div>
+      <button aria-label="选择外观主题" aria-expanded={expanded} className="mt-3 flex min-h-14 w-full items-center gap-3 rounded-xl bg-slate-50 px-3 text-left" onClick={() => setExpanded((current) => !current)} type="button">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand shadow-sm">{selected.icon}</span>
+        <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-ink">{selected.label}</span><span className="block truncate text-xs text-slate-500">{selected.caption}</span></span>
+        <ChevronDown className={`shrink-0 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} size={18} />
+      </button>
+      {expanded ? <div className="mt-2 grid gap-1 rounded-xl bg-slate-50 p-1.5">{OPTIONS.map((option) => <button aria-label={option.label} aria-pressed={value === option.value} className={`flex min-h-12 items-center gap-3 rounded-lg px-3 text-left ${value === option.value ? 'bg-teal-50 text-brand' : 'text-ink'}`} key={option.value} onClick={() => choose(option.value)} type="button"><span className="shrink-0">{option.icon}</span><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{option.label}</span><span className="block truncate text-xs text-slate-500">{option.caption}</span></span>{value === option.value ? <Check size={17} /> : null}</button>)}</div> : null}
     </section>
   );
 }
