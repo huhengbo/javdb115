@@ -132,15 +132,21 @@ jobs:
             sleep 1
           done
           curl --fail --silent http://127.0.0.1:18080/api/health >/dev/null
-          curl --fail --silent \
+
+          login_response="$(curl --fail --silent \
             --cookie-jar "${RUNNER_TEMP}/cookies.txt" \
             -H 'Content-Type: application/json' \
             -d '{"username":"admin","password":"e2e-password"}' \
-            http://127.0.0.1:18080/api/auth/login | grep -q '"username":"admin"'
-          curl --fail --silent \
+            http://127.0.0.1:18080/api/auth/login)"
+          grep -q '"username":"admin"' <<<"${login_response}"
+
+          me_response="$(curl --fail --silent \
             --cookie "${RUNNER_TEMP}/cookies.txt" \
-            http://127.0.0.1:18080/api/auth/me | grep -q '"username":"admin"'
-          curl --fail --silent http://127.0.0.1:18080/ | grep -q 'id="root"'
+            http://127.0.0.1:18080/api/auth/me)"
+          grep -q '"username":"admin"' <<<"${me_response}"
+
+          root_response="$(curl --fail --silent http://127.0.0.1:18080/)"
+          grep -q 'id="root"' <<<"${root_response}"
 
   docker:
     name: Docker security + build (amd64 + arm64)
