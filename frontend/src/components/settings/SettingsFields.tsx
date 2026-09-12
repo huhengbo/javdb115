@@ -26,7 +26,7 @@ export function CookieField(props: FieldProps) {
     <TextAreaField
       fieldKey="p115_cookie"
       label="115 Cookie"
-      placeholder={secretPlaceholder(props.values, 'p115_cookie')}
+      placeholder="输入新值以设置或覆盖现有 Cookie"
       rowsClassName="min-h-24"
       values={props.values}
       onChange={props.onChange}
@@ -40,7 +40,7 @@ export function TelegramFields(props: FieldProps) {
       <TextAreaField
         fieldKey="telegram_bot_token"
         label="Bot Token"
-        placeholder={secretPlaceholder(props.values, 'telegram_bot_token')}
+        placeholder="输入新值以设置或覆盖现有 Token"
         rowsClassName="min-h-16"
         values={props.values}
         onChange={props.onChange}
@@ -147,10 +147,6 @@ function KeywordField(props: { readonly label: string; readonly onChange: (keywo
       />
     </label>
   );
-}
-
-function secretPlaceholder(values: Record<string, string>, key: string): string {
-  return values[`__configured:${key}`] === '1' ? '已配置；输入新值可覆盖' : '未配置';
 }
 
 function parseFilterRules(value: string): { ok: true; rules: FilterRules } | { ok: false; message: string } {
