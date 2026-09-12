@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generate GitHub Release notes from one version section in CHANGELOG.md."""
 
 from __future__ import annotations
