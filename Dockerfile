@@ -34,7 +34,10 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:${PATH}"
 
-RUN groupadd --gid "${APP_GID}" app \
+RUN python -m pip uninstall --yes msgpack setuptools \
+    && python -m pip uninstall --yes pip \
+    && rm -rf /root/.cache/pip \
+    && groupadd --gid "${APP_GID}" app \
     && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --shell /usr/sbin/nologin app \
     && mkdir -p /app/backend /data \
     && chown -R app:app /app /data
