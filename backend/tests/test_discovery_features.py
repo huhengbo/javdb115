@@ -6,6 +6,7 @@ from typing import Any, cast
 
 from app.adapters.javdb_api import JavdbApiClient, JavdbApiResponseCache
 from app.database import Database
+from app.errors import IntegrationError
 from app.repositories.follows import FollowsRepository
 
 
@@ -49,6 +50,8 @@ class ApiCaptureBrowser:
         self.calls.append((path, query))
         if path == "/api/v1/rankings/actors":
             return json.dumps({"data": {"actors": [{"id": "actor-1"}]}})
+        if path == "/api/v1/movies/top":
+            return json.dumps({"data": {"movies": [{"id": "movie-1"}]}})
         if path == "/api/v1/movies/movie-1/reviews":
             return json.dumps({"data": {"reviews": [{"id": 1, "content": "ok"}]}})
         return json.dumps({"data": {"movies": [{"id": "movie-1"}]}})
@@ -238,19 +241,69 @@ def test_rankings_forwards_app_query_parameters() -> None:
     browser = ApiCaptureBrowser()
     client = JavdbApiClient(cast(Any, browser))
 
-    movies = client.rankings(rtype="1", period="today")
+    movies = client.rankings(rtype="1", period="daily")
     playback = client.rankings_playback(period="weekly", filter_by="all")
-    actors = client.rankings_actors(rtype="monthly")
+    actors = client.rankings_actors(rtype="0")
 
     assert movies == [{"id": "movie-1"}]
     assert playback == [{"id": "movie-1"}]
     assert actors == [{"id": "actor-1"}]
     assert browser.calls[0][0] == "/api/v1/rankings"
-    assert "type=1&period=today" in browser.calls[0][1]
+    assert "type=1&period=daily" in browser.calls[0][1]
     assert browser.calls[1][0] == "/api/v1/rankings/playback"
     assert "period=weekly&filter_by=all" in browser.calls[1][1]
     assert browser.calls[2][0] == "/api/v1/rankings/actors"
-    assert "type=monthly" in browser.calls[2][1]
+    assert "type=0" in browser.calls[2][1]
+
+
+def test_movies_top_forwards_public_query_parameters() -> None:
+    browser = ApiCaptureBrowser()
+    client = JavdbApiClient(cast(Any, browser))
+
+    movies = client.movies_top(page=2, limit=50, rtype="video_type", type_value="1")
+
+    assert movies == [{"id": "movie-1"}]
+    assert browser.calls[0][0] == "/api/v1/movies/top"
+    assert "start_rank=1" in browser.calls[0][1]
+    assert "type=video_type" in browser.calls[0][1]
+    assert "type_value=1" in browser.calls[0][1]
+    assert "ignore_watched=false" in browser.calls[0][1]
+    assert "page=2" in browser.calls[0][1]
+    assert "limit=50" in browser.calls[0][1]
+
+
+def test_movies_top_year_filter_stays_unauthenticated() -> None:
+    browser = ApiCaptureBrowser()
+    client = JavdbApiClient(cast(Any, browser))
+
+    client.movies_top(page=1, rtype="year", type_value="2024")
+
+    assert browser.calls[0][0] == "/api/v1/movies/top"
+    assert "type=year" in browser.calls[0][1]
+    assert "type_value=2024" in browser.calls[0][1]
+    assert "ignore_watched=false" in browser.calls[0][1]
+
+
+def test_movies_top_rejects_login_required_response() -> None:
+    class LoginRequiredTransport:
+        def javdb_api_get(self, path: str, query: str, sig: str) -> str:
+            assert path == "/api/v1/movies/top"
+            return json.dumps(
+                {
+                    "success": 0,
+                    "action": "JWTVerificationError",
+                    "message": "請登錄帳號",
+                    "data": None,
+                }
+            )
+
+    client = JavdbApiClient(cast(Any, LoginRequiredTransport()))
+    try:
+        client.movies_top()
+    except IntegrationError as exc:
+        assert "公开接口" in exc.message
+        return
+    raise AssertionError("expected IntegrationError")
 
 
 def test_movie_reviews_forwards_hot_sort_parameters() -> None:
@@ -269,8 +322,8 @@ def test_javdb_api_client_caches_successful_responses() -> None:
     cache = JavdbApiResponseCache(max_entries=10)
     client = JavdbApiClient(cast(Any, browser), cache=cache)
 
-    first = client.rankings(rtype="1", period="today")
-    second = client.rankings(rtype="1", period="today")
+    first = client.rankings(rtype="1", period="daily")
+    second = client.rankings(rtype="1", period="daily")
 
     assert first == second
     assert len(browser.calls) == 1
@@ -281,8 +334,8 @@ def test_javdb_api_cache_key_includes_query() -> None:
     cache = JavdbApiResponseCache(max_entries=10)
     client = JavdbApiClient(cast(Any, browser), cache=cache)
 
-    client.rankings(rtype="1", period="today")
-    client.rankings(rtype="2", period="today")
+    client.rankings(rtype="1", period="daily")
+    client.rankings(rtype="2", period="daily")
 
     assert len(browser.calls) == 2
 

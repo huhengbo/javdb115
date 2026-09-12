@@ -51,6 +51,17 @@ def movies_recommend(
     return client.movies_recommend(period)
 
 
+@router.get("/movies/top")
+def movies_top(
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=50, ge=1, le=50),
+    type: str = Query(default="all"),
+    type_value: str = Query(default=""),
+    client: JavdbApiClient = Depends(get_client),
+) -> list[dict[str, Any]]:
+    return client.movies_top(page=page, limit=limit, rtype=type, type_value=type_value)
+
+
 @router.get("/movies/{movie_id}/bundle", response_model=MovieBundleOut)
 def movie_bundle(
     movie_id: str,
@@ -94,7 +105,7 @@ def movie_reviews(
 @router.get("/rankings")
 def rankings(
     type: str = Query(default="0"),
-    period: str = Query(default="today"),
+    period: str = Query(default="daily"),
     client: JavdbApiClient = Depends(get_client),
 ) -> list[dict[str, Any]]:
     return client.rankings(rtype=type, period=period)
@@ -111,7 +122,7 @@ def rankings_playback(
 
 @router.get("/rankings/actors")
 def rankings_actors(
-    type: str = Query(default="monthly"),
+    type: str = Query(default="0"),
     client: JavdbApiClient = Depends(get_client),
 ) -> list[dict[str, Any]]:
     return client.rankings_actors(rtype=type)
