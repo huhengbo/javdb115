@@ -29,6 +29,7 @@ test('mobile search clears an in-flight result and keeps the latest list', async
 test('settings preserve multiline filter drafts and save normalized values', async ({ page }) => {
   await page.goto('/settings');
   await expect(page.getByRole('heading', { name: '设置' })).toBeVisible();
+  await page.getByRole('button', { name: /高级过滤规则/ }).click();
 
   const keywords = page.getByLabel('必须包含关键词');
   await keywords.fill('中文字幕\n中文输入');
@@ -148,7 +149,7 @@ function settingsFixture() {
     p115_completed_uncensored_dir_id: '',
     p115_completed_uncensored_dir_label: '',
     p115_completed_fc2_dir_id: '',
-    p115_completed_fc2_dir_label: ''
+    p115_completed_fc2_dir_label: '',
   };
   return Object.entries(values).map(([key, value]) => ({ key, value, is_secret: key === 'p115_cookie' || key === 'telegram_bot_token' }));
 }
