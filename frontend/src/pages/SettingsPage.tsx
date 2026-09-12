@@ -1,4 +1,4 @@
-import { Send, Save } from 'lucide-react';
+import { RotateCcw, Save, Send } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { client } from '../api';
 import { DirectoryPicker, type DirectorySelection } from '../components/DirectoryPicker';
@@ -53,7 +53,7 @@ const categoryCompletedDirectories = [
 const telegramConnectionKeys = ['telegram_bot_token'] as const;
 
 const settingKeys = [
-  ['p115_cookie', '115 Cookie', false],
+  ['p115_cookie', '115 Cookie', true],
   ['telegram_bot_token', 'Telegram Bot Token', true],
   ['telegram_chat_id', 'Telegram Chat ID（可空）', false],
   ['check_cron', '检查 Cron', false],
@@ -74,14 +74,6 @@ const settingKeys = [
 type CompletedDirMode = typeof COMPLETED_DIR_MODE_SINGLE | typeof COMPLETED_DIR_MODE_CATEGORY;
 type DirectoryConfig = typeof downloadDirectory | typeof unifiedCompletedDirectory | typeof categoryCompletedDirectories[number];
 
-type SettingsLoadState = {
-  readonly setError: (message: string | null) => void;
-  readonly setHasLoaded: (value: boolean) => void;
-  readonly setIsLoading: (value: boolean) => void;
-  readonly setSavedValues: (values: Record<string, string>) => void;
-  readonly setValues: (values: Record<string, string>) => void;
-};
-
 type SettingsSaveState = {
   readonly setDirectoryReloadKey: (update: (value: number) => number) => void;
   readonly setError: (message: string | null) => void;
@@ -95,13 +87,13 @@ export function SettingsPage() {
   const form = useSettingsForm();
 
   return (
-    <section>
-      <SettingsHeader isDisabled={!form.hasLoaded || form.isSaving} isSaving={form.isSaving} onSave={form.save} />
+    <section className={form.hasUnsavedChanges ? 'pb-24' : undefined}>
+      <SettingsHeader hasUnsavedChanges={form.hasUnsavedChanges} isDisabled={!form.hasLoaded || form.isSaving} isSaving={form.isSaving} onSave={form.save} />
       <SettingsFeedback error={form.error} isLoading={form.isLoading} message={form.message} />
-      <div className="mt-4 space-y-3">
+      <fieldset className="mt-4 space-y-3 disabled:opacity-70" disabled={!form.hasLoaded || form.isSaving}>
         <SettingsGroup title="115 账号" caption="Cookie 可手动填写，也可以通过扫码登录自动写入。">
           <CookieField values={form.values} onChange={form.setValue} />
-          <P115QrLoginPanel onSuccess={form.reload} />
+          <P115QrLoginPanel onSuccess={form.onP115LoginSuccess} />
         </SettingsGroup>
         <SettingsGroup title="目录" caption="选择 115 下载临时目录和整理完成目录。">
           <DirectorySettings form={form} />
@@ -116,7 +108,10 @@ export function SettingsPage() {
         <SettingsGroup title="高级过滤规则" caption="用于自动挑选磁力，保存后后续检查会使用新规则。">
           <FilterRulesEditor value={form.values.filter_rules ?? ''} onChange={(value) => form.setValue('filter_rules', value)} />
         </SettingsGroup>
-      </div>
+      </fieldset>
+      {form.hasUnsavedChanges ? (
+        <MobileSaveBar isSaving={form.isSaving} onDiscard={form.discard} onSave={form.save} />
+      ) : null}
     </section>
   );
 }
@@ -130,15 +125,35 @@ function useSettingsForm() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [directoryReloadKey, setDirectoryReloadKey] = useState(0);
+  const hasUnsavedChanges = settingKeys.some(([key]) => (values[key] ?? '') !== (savedValues[key] ?? ''));
   const hasUnsavedTelegramSettings = telegramConnectionKeys.some((key) => values[key] !== savedValues[key]);
 
   useEffect(() => {
-    void loadSettings({ setError, setHasLoaded, setIsLoading, setSavedValues, setValues });
+    void client.settings()
+      .then((items) => {
+        const nextValues = mapSettings(items);
+        setValues(nextValues);
+        setSavedValues(nextValues);
+        setHasLoaded(true);
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setIsLoading(false));
   }, []);
 
-  async function reload() {
-    await reloadSettings({ setError, setHasLoaded, setIsLoading, setSavedValues, setValues });
-  }
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('settings-dirty-change', { detail: { dirty: hasUnsavedChanges } }));
+    if (!hasUnsavedChanges) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => () => {
+    window.dispatchEvent(new CustomEvent('settings-dirty-change', { detail: { dirty: false } }));
+  }, []);
 
   async function save() {
     await saveSettings({
@@ -149,6 +164,17 @@ function useSettingsForm() {
       setSavedValues,
       values
     });
+  }
+
+  function discard() {
+    setValues({ ...savedValues });
+    setMessage('已放弃未保存修改');
+    setError(null);
+  }
+
+  function onP115LoginSuccess() {
+    setMessage('115 扫码登录成功，其他未保存设置已保留');
+    setDirectoryReloadKey((current) => current + 1);
   }
 
   function setValue(key: string, value: string) {
@@ -168,13 +194,15 @@ function useSettingsForm() {
   return {
     completedDirMode,
     directoryReloadKey,
+    discard,
     error,
     hasLoaded,
+    hasUnsavedChanges,
     hasUnsavedTelegramSettings,
     isLoading,
     isSaving,
     message,
-    reload,
+    onP115LoginSuccess,
     save,
     setDirectory,
     setValue,
@@ -182,41 +210,20 @@ function useSettingsForm() {
   };
 }
 
-async function loadSettings(state: SettingsLoadState) {
-  await client.settings()
-    .then((items) => {
-      const values = mapSettings(items);
-      state.setValues(values);
-      state.setSavedValues(values);
-      state.setHasLoaded(true);
-    })
-    .catch((err: Error) => state.setError(err.message))
-    .finally(() => state.setIsLoading(false));
-}
-
-async function reloadSettings(state: SettingsLoadState) {
-  state.setError(null);
-  state.setIsLoading(true);
-  await loadSettings(state);
-}
-
 async function saveSettings(state: SettingsSaveState) {
   state.setError(null);
   state.setMessage(null);
   state.setIsSaving(true);
-  await persistSettings(state);
-}
-
-async function persistSettings(state: SettingsSaveState) {
+  const snapshot = { ...state.values };
   const items = settingKeys.map(([key, , secret]) => ({
     key,
-    value: state.values[key] ?? '',
+    value: snapshot[key] ?? '',
     is_secret: secret
   }));
   try {
     await client.saveSettings(items);
     state.setMessage('已保存');
-    state.setSavedValues(state.values);
+    state.setSavedValues(snapshot);
     state.setDirectoryReloadKey((current) => current + 1);
   } catch (err) {
     state.setError((err as Error).message);
@@ -233,35 +240,46 @@ function completedDirModeFromValues(values: Record<string, string>): CompletedDi
 
 type SettingsForm = ReturnType<typeof useSettingsForm>;
 
-type SettingsHeaderProps = {
+function SettingsHeader(props: {
+  readonly hasUnsavedChanges: boolean;
   readonly isDisabled: boolean;
   readonly isSaving: boolean;
   readonly onSave: () => Promise<void>;
-};
-
-function SettingsHeader({ isDisabled, isSaving, onSave }: SettingsHeaderProps) {
+}) {
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex items-start justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-semibold text-ink">设置</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-semibold text-ink">设置</h1>
+          {props.hasUnsavedChanges ? <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">未保存</span> : null}
+        </div>
         <p className="mt-1 text-sm text-slate-600">凭据、规则、定时和 115 目录</p>
       </div>
-      <button className="flex min-h-11 items-center gap-2 rounded-md bg-brand px-3 text-white disabled:opacity-60" disabled={isDisabled} onClick={onSave} type="button">
+      <button className="hidden min-h-11 items-center gap-2 rounded-md bg-brand px-3 text-white active:opacity-85 disabled:opacity-60 sm:flex" disabled={props.isDisabled || !props.hasUnsavedChanges} onClick={() => void props.onSave()} type="button">
         <Save size={18} />
-        {isSaving ? '保存中' : '保存'}
+        {props.isSaving ? '保存中' : '保存'}
       </button>
     </div>
   );
 }
 
+function MobileSaveBar(props: { readonly isSaving: boolean; readonly onDiscard: () => void; readonly onSave: () => Promise<void> }) {
+  return (
+    <div className="fixed inset-x-0 z-30 mx-auto max-w-3xl border-t border-line bg-white/95 px-4 pb-3 pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:hidden" style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom))' }}>
+      <div className="grid grid-cols-2 gap-2">
+        <button className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-line bg-white text-sm font-medium text-ink" disabled={props.isSaving} onClick={props.onDiscard} type="button"><RotateCcw size={16} />放弃修改</button>
+        <button className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-brand text-sm font-medium text-white disabled:opacity-60" disabled={props.isSaving} onClick={() => void props.onSave()} type="button"><Save size={16} />{props.isSaving ? '保存中' : '保存'}</button>
+      </div>
+    </div>
+  );
+}
+
 function SettingsFeedback({ error, isLoading, message }: { readonly error: string | null; readonly isLoading: boolean; readonly message: string | null }) {
-  if (isLoading) {
-    return <p className="mt-3 rounded-md border border-line bg-white p-3 text-sm text-slate-600">设置加载中...</p>;
-  }
+  if (isLoading) return <p className="mt-3 rounded-md border border-line bg-white p-3 text-sm text-slate-600">设置加载中...</p>;
   return (
     <>
-      {message ? <p className="mt-3 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p> : null}
-      {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger">{error}</p> : null}
+      {message ? <p className="mt-3 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700" role="status">{message}</p> : null}
+      {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger" role="alert">{error}</p> : null}
     </>
   );
 }
@@ -275,11 +293,7 @@ function DirectorySettings({ form }: { readonly form: SettingsForm }) {
   );
 }
 
-function DirectoryPickerField(props: {
-  readonly config: DirectoryConfig;
-  readonly form: SettingsForm;
-}) {
-  const { config, form } = props;
+function DirectoryPickerField({ config, form }: { readonly config: DirectoryConfig; readonly form: SettingsForm }) {
   return (
     <DirectoryPicker
       helperText={'helperText' in config ? config.helperText : undefined}
@@ -306,20 +320,13 @@ function CompletedDirectorySettings({ form }: { readonly form: SettingsForm }) {
       <div className="grid gap-3">
         {mode === COMPLETED_DIR_MODE_SINGLE ? (
           <DirectoryPickerField config={unifiedCompletedDirectory} form={form} />
-        ) : (
-          categoryCompletedDirectories.map((config) => (
-            <DirectoryPickerField config={config} form={form} key={config.idKey} />
-          ))
-        )}
+        ) : categoryCompletedDirectories.map((config) => <DirectoryPickerField config={config} form={form} key={config.idKey} />)}
       </div>
     </section>
   );
 }
 
-function CompletedModeSwitch(props: {
-  readonly mode: CompletedDirMode;
-  readonly onChange: (mode: CompletedDirMode) => void;
-}) {
+function CompletedModeSwitch(props: { readonly mode: CompletedDirMode; readonly onChange: (mode: CompletedDirMode) => void }) {
   return (
     <div className="grid grid-cols-2 rounded-md bg-slate-100 p-1 text-sm">
       <ModeButton active={props.mode === COMPLETED_DIR_MODE_SINGLE} label="统一目录" onClick={() => props.onChange(COMPLETED_DIR_MODE_SINGLE)} />
@@ -328,31 +335,11 @@ function CompletedModeSwitch(props: {
   );
 }
 
-function ModeButton(props: {
-  readonly active: boolean;
-  readonly label: string;
-  readonly onClick: () => void;
-}) {
-  const className = props.active ? 'bg-white text-ink shadow-sm' : 'text-slate-500';
-  return (
-    <button
-      aria-pressed={props.active}
-      className={`min-h-10 rounded px-3 font-medium ${className}`}
-      onClick={props.onClick}
-      type="button"
-    >
-      {props.label}
-    </button>
-  );
+function ModeButton(props: { readonly active: boolean; readonly label: string; readonly onClick: () => void }) {
+  return <button aria-pressed={props.active} className={`min-h-10 rounded px-3 font-medium ${props.active ? 'bg-white text-ink shadow-sm' : 'text-slate-500'}`} onClick={props.onClick} type="button">{props.label}</button>;
 }
 
-function TelegramTestPanel({
-  chatId,
-  hasUnsavedChanges
-}: {
-  readonly chatId: string;
-  readonly hasUnsavedChanges: boolean;
-}) {
+function TelegramTestPanel({ chatId, hasUnsavedChanges }: { readonly chatId: string; readonly hasUnsavedChanges: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -383,18 +370,10 @@ function TelegramTestPanel({
           <p className="mt-1 text-xs text-slate-500">检查 Bot Token，并自动写入命令菜单；发送 /start 绑定通知</p>
           <p className="mt-1 text-xs text-slate-500">绑定状态：{chatId.trim() ? `已绑定 ${chatId}` : '未绑定'}</p>
         </div>
-        <button
-          className="flex min-h-11 items-center gap-2 rounded-md border border-line px-3 text-sm font-medium text-ink disabled:opacity-60"
-          disabled={isSending}
-          onClick={sendTest}
-          type="button"
-        >
-          <Send size={16} />
-          {isSending ? '检查中' : '检查连接'}
-        </button>
+        <button className="flex min-h-11 shrink-0 items-center gap-2 rounded-md border border-line px-3 text-sm font-medium text-ink disabled:opacity-60" disabled={isSending} onClick={() => void sendTest()} type="button"><Send size={16} />{isSending ? '检查中' : '检查连接'}</button>
       </div>
-      {message ? <p className="mt-3 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p> : null}
-      {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger">{error}</p> : null}
+      {message ? <p className="mt-3 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700" role="status">{message}</p> : null}
+      {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger" role="alert">{error}</p> : null}
     </section>
   );
 }
