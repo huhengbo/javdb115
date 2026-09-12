@@ -12,12 +12,14 @@ const GENRES = [
   { key: 'can_play', label: '可播放' },
   { key: 'magnets', label: '有磁力' }
 ] as const;
+const PAGE_SIZE = 24;
 
 export function DiscoveryPage() {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [follows, setFollows] = useState<Follow[]>([]);
   const [filter, setFilter] = useState('can_play');
   const [page, setPage] = useState(1);
+  const [failedPage, setFailedPage] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -26,6 +28,9 @@ export function DiscoveryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Movie[] | null>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const latestSeq = useRef(0);
+  const searchSeq = useRef(0);
   const { selectedMovie, selectedActor, activeOverlayKind, openMovie, closeMovie, openActor, closeActor } =
     useDetailHistory('discovery');
 
@@ -35,21 +40,29 @@ export function DiscoveryPage() {
   );
 
   const loadMovies = useCallback(async (nextFilter: string, nextPage: number, append: boolean) => {
-    if (append) {
-      setLoadingMore(true);
-    } else {
-      setLoading(true);
-    }
+    const seq = ++latestSeq.current;
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     setError(null);
     try {
-      const result = await client.moviesLatest(nextFilter, nextPage, 24);
-      setMovies((current) => (append ? [...current, ...result] : result));
-      setHasMore(result.length === 24);
+      const result = await client.moviesLatest(nextFilter, nextPage, PAGE_SIZE);
+      if (seq !== latestSeq.current) return false;
+      setMovies((current) => append ? mergeMovies(current, result) : result);
+      setHasMore(result.length === PAGE_SIZE);
+      setPage(nextPage);
+      setFailedPage(null);
+      return true;
     } catch (err) {
-      setError((err as Error).message);
+      if (seq === latestSeq.current) {
+        setError((err as Error).message);
+        if (append) setFailedPage(nextPage);
+      }
+      return false;
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (seq === latestSeq.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, []);
 
@@ -62,8 +75,9 @@ export function DiscoveryPage() {
   }
 
   useEffect(() => {
-    setPage(1);
+    searchSeq.current += 1;
     setSearchResults(null);
+    setFailedPage(null);
     void loadMovies(filter, 1, false);
   }, [filter, loadMovies]);
 
@@ -73,40 +87,38 @@ export function DiscoveryPage() {
 
   useEffect(() => {
     const element = loaderRef.current;
-    if (!element) {
-      return;
-    }
+    if (!element) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (!entry.isIntersecting || !hasMore || loading || loadingMore || searchResults) {
-          return;
-        }
-        const nextPage = page + 1;
-        setPage(nextPage);
-        void loadMovies(filter, nextPage, true);
+        if (!entry.isIntersecting || !hasMore || loading || loadingMore || searchResults || failedPage) return;
+        void loadMovies(filter, page + 1, true);
       },
       { threshold: 0.1 }
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, [filter, hasMore, loadMovies, loading, loadingMore, page, searchResults]);
+  }, [failedPage, filter, hasMore, loadMovies, loading, loadingMore, page, searchResults]);
 
   async function handleSearch() {
-    if (!searchQuery.trim()) {
-      return;
-    }
+    const query = searchQuery.trim();
+    if (!query || searchLoading) return;
+    const seq = ++searchSeq.current;
     setSearchLoading(true);
     setError(null);
+    searchInputRef.current?.blur();
     try {
-      setSearchResults(await client.search(searchQuery.trim()));
+      const result = await client.search(query);
+      if (seq === searchSeq.current) setSearchResults(result);
     } catch (err) {
-      setError((err as Error).message);
+      if (seq === searchSeq.current) setError((err as Error).message);
     } finally {
-      setSearchLoading(false);
+      if (seq === searchSeq.current) setSearchLoading(false);
     }
   }
 
   function clearSearch() {
+    searchSeq.current += 1;
+    setSearchLoading(false);
     setSearchQuery('');
     setSearchResults(null);
     setError(null);
@@ -127,19 +139,28 @@ export function DiscoveryPage() {
   return (
     <section>
       <h1 className="text-2xl font-semibold text-ink">发现</h1>
-      <div className="mt-3 flex gap-2">
+      <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); void handleSearch(); }}>
         <div className="relative min-w-0 flex-1">
+          <label className="sr-only" htmlFor="discovery-search">搜索番号或演员名</label>
           <input
+            autoCapitalize="none"
+            autoCorrect="off"
             className="min-h-11 w-full rounded-md border border-line px-3 pr-10 text-sm"
+            enterKeyHint="search"
+            id="discovery-search"
             placeholder="搜索番号、演员名..."
+            ref={searchInputRef}
+            type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            onKeyDown={(event) => event.key === 'Enter' && handleSearch()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault();
+            }}
           />
           {searchQuery ? (
             <button
               aria-label="清空搜索"
-              className="absolute right-1 top-1 flex h-9 w-9 items-center justify-center rounded-md text-slate-400"
+              className="absolute right-1 top-1 flex h-9 w-9 items-center justify-center rounded-md text-slate-400 active:bg-slate-100"
               onClick={clearSearch}
               type="button"
             >
@@ -149,18 +170,18 @@ export function DiscoveryPage() {
         </div>
         <button
           aria-label="搜索作品"
-          className="flex min-h-11 items-center gap-1 rounded-md bg-brand px-3 text-white disabled:opacity-60"
-          disabled={searchLoading}
-          onClick={handleSearch}
-          type="button"
+          className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-md bg-brand px-3 text-white active:opacity-85 disabled:opacity-60"
+          disabled={searchLoading || !searchQuery.trim()}
+          type="submit"
         >
           {searchLoading ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
         </button>
-      </div>
+      </form>
       <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
         {GENRES.map((genre) => (
           <button
-            className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
+            aria-pressed={filter === genre.key}
+            className={`min-h-10 shrink-0 rounded-full px-3 text-xs font-medium active:opacity-80 ${
               filter === genre.key ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600'
             }`}
             key={genre.key}
@@ -171,11 +192,11 @@ export function DiscoveryPage() {
           </button>
         ))}
       </div>
-      {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger">{error}</p> : null}
+      {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger" role="alert">{error}</p> : null}
       <div className="mt-4">
         <h2 className="text-sm font-medium text-ink">{searchResults ? `搜索结果 (${searchResults.length})` : '最新作品'}</h2>
         {loading ? (
-          <p className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+          <p className="mt-3 flex items-center gap-2 text-sm text-slate-500" aria-live="polite">
             <Loader2 className="animate-spin" size={16} />
             加载中...
           </p>
@@ -194,11 +215,13 @@ export function DiscoveryPage() {
             {!searchResults ? (
               <div className="mt-4 flex justify-center" ref={loaderRef}>
                 {loadingMore ? (
-                  <Loader2 className="animate-spin text-slate-400" size={20} />
+                  <span className="flex min-h-11 items-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} />加载中...</span>
+                ) : failedPage ? (
+                  <button className="min-h-11 rounded-md border border-line bg-white px-4 text-sm text-ink" onClick={() => void loadMovies(filter, failedPage, true)} type="button">重试加载第 {failedPage} 页</button>
                 ) : hasMore ? (
-                  <span className="text-xs text-slate-300">上滑加载更多</span>
+                  <button className="min-h-11 rounded-md px-4 text-sm text-slate-500" onClick={() => void loadMovies(filter, page + 1, true)} type="button">加载更多</button>
                 ) : (
-                  <span className="text-xs text-slate-300">— 已加载全部 —</span>
+                  <span className="py-3 text-xs text-slate-400">— 已加载全部 —</span>
                 )}
               </div>
             ) : null}
@@ -228,10 +251,15 @@ export function DiscoveryPage() {
   );
 }
 
+function mergeMovies(current: Movie[], incoming: Movie[]): Movie[] {
+  const seen = new Set(current.map((movie) => movie.id));
+  return [...current, ...incoming.filter((movie) => !seen.has(movie.id))];
+}
+
 function MovieCard(props: { readonly movie: Movie; readonly onClick: () => void }) {
   return (
     <button
-      className="rounded-lg border border-line bg-white p-2 text-left transition-shadow hover:shadow-md"
+      className="rounded-lg border border-line bg-white p-2 text-left transition-shadow active:scale-[0.99] sm:hover:shadow-md"
       onClick={props.onClick}
       type="button"
     >
