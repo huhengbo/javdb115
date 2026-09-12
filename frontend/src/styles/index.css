@@ -224,7 +224,7 @@ a:active {
 }
 .settings-row-label { font-size: 0.875rem; font-weight: 550; color: var(--ui-text); }
 .appearance-toggle { display: flex; align-items: center; gap: 0.125rem; border-radius: 0.5rem; background: var(--ui-surface-muted); padding: 0.125rem; }
-.appearance-toggle-item { display: flex; min-height: 2rem; align-items: center; gap: 0.25rem; border-radius: 0.375rem; padding: 0 0.5rem; font-size: 0.75rem; color: var(--ui-text-muted); }
+.appearance-toggle-item { display: flex; min-height: 2.75rem; align-items: center; gap: 0.25rem; border-radius: 0.375rem; padding: 0 0.5rem; font-size: 0.75rem; color: var(--ui-text-muted); }
 .appearance-toggle-item-selected { background: var(--ui-surface); color: var(--ui-text); box-shadow: 0 1px 2px rgb(15 23 42 / 0.08); }
 
 .quiet-list { border-top: 1px solid var(--ui-border); }
