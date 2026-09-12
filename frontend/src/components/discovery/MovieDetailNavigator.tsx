@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { client } from '../../api';
 import { useDetailHistory } from '../../lib/useDetailHistory';
 import type { ActorRef } from '../../lib/javdb';
@@ -6,10 +6,20 @@ import type { Follow } from '../../types';
 import { ActorDetailSheet } from './ActorDetailSheet';
 import { MovieDetailSheet } from './MovieDetailSheet';
 
+type MovieNavigation = {
+  readonly openMovie: (movieId: string) => void;
+};
+
 type Props = {
   readonly scope: string;
-  readonly children: (openMovie: (movieId: string) => void) => ReactNode;
+  readonly children: ReactNode;
 };
+
+const MovieNavigationContext = createContext<MovieNavigation>({ openMovie: () => undefined });
+
+export function useMovieNavigation(): MovieNavigation {
+  return useContext(MovieNavigationContext);
+}
 
 export function MovieDetailNavigator({ scope, children }: Props) {
   const [follows, setFollows] = useState<Follow[]>([]);
@@ -29,6 +39,10 @@ export function MovieDetailNavigator({ scope, children }: Props) {
         .map((follow) => [follow.actor_external_id, follow])
     ),
     [follows]
+  );
+  const navigation = useMemo<MovieNavigation>(
+    () => ({ openMovie: (movieId) => openMovie(movieId) }),
+    [openMovie]
   );
 
   useEffect(() => {
@@ -56,8 +70,8 @@ export function MovieDetailNavigator({ scope, children }: Props) {
   }
 
   return (
-    <>
-      {children((movieId) => openMovie(movieId))}
+    <MovieNavigationContext.Provider value={navigation}>
+      {children}
       {selectedMovie ? (
         <MovieDetailSheet
           isTop={activeOverlayKind === 'movie'}
@@ -77,6 +91,6 @@ export function MovieDetailNavigator({ scope, children }: Props) {
           onSaveFollow={saveFollow}
         />
       ) : null}
-    </>
+    </MovieNavigationContext.Provider>
   );
 }
