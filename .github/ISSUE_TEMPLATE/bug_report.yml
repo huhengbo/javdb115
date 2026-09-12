@@ -1,0 +1,49 @@
+name: Bug report
+description: 报告可复现的问题
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请勿提交真实的 115 Cookie、Telegram Token、管理员密码、数据库文件或其他敏感信息。
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 清晰描述实际行为与期望行为。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / Commit
+      placeholder: master / commit SHA / image tag
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: 部署方式
+      options:
+        - Docker Compose
+        - Docker
+        - 本地开发
+        - 其他
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏后的日志
+      render: shell
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其他信息
