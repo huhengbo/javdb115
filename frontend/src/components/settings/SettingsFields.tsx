@@ -72,7 +72,7 @@ function TextAreaField(props: FieldProps & { readonly fieldKey: string; readonly
     <label className="block">
       <span className="text-sm font-medium text-ink">{props.label}</span>
       <textarea className={`mt-2 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink ${props.rowsClassName}`} onChange={(event) => props.onChange(props.fieldKey, event.target.value)} placeholder={props.placeholder} value={props.values[props.fieldKey] ?? ''} />
-      {props.placeholder ? <span className="mt-1 block text-xs text-slate-500">敏感值不会从服务器回显；留空时保持现有值。</span> : null}
+      {props.placeholder ? <span className="mt-1 block text-xs text-slate-500">敏感值不会从服务器回显；留空保存会保持现有值。</span> : null}
     </label>
   );
 }
