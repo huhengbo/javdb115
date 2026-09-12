@@ -60,9 +60,9 @@ export function DashboardPage({ onOpenSettings, onOpenTasks }: Props) {
 
   return (
     <section>
-      <div className="flex min-h-10 items-center justify-between gap-3">
+      <div className="flex min-h-11 items-center justify-between gap-3">
         <p className="text-xs text-slate-400">{formatDateTime(lastRefreshedAt)}</p>
-        <button aria-label="立即检查" className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-50" disabled={isChecking} onClick={runCheck} type="button">
+        <button aria-label="立即检查" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-50" disabled={isChecking} onClick={runCheck} type="button">
           <RefreshCw className={isChecking ? 'animate-spin' : ''} size={18} />
         </button>
       </div>
@@ -75,7 +75,7 @@ export function DashboardPage({ onOpenSettings, onOpenTasks }: Props) {
       {data ? <StageOverview data={data} /> : null}
       {data ? (
         <section className="mt-6">
-          <SectionHeader title="最近任务" trailing={<button className="flex min-h-10 items-center gap-1 px-1 text-sm font-medium text-brand" onClick={onOpenTasks} type="button">全部<ChevronRight size={16} /></button>} />
+          <SectionHeader title="最近任务" trailing={<button className="flex min-h-11 items-center gap-1 px-1 text-sm font-medium text-brand" onClick={onOpenTasks} type="button">全部<ChevronRight size={16} /></button>} />
           <div className="mt-2"><TaskList tasks={data.recent_tasks.slice(0, 3)} onChanged={refreshDashboard} compact /></div>
         </section>
       ) : null}
@@ -192,7 +192,7 @@ function InfoRow({ label, value }: { readonly label: string; readonly value: str
 }
 
 function SettingsButton({ onOpenSettings }: { readonly onOpenSettings: () => void }) {
-  return <button className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-ink" onClick={onOpenSettings} type="button"><Settings size={16} />设置</button>;
+  return <button className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-white px-3 text-sm font-medium text-ink" onClick={onOpenSettings} type="button"><Settings size={16} />设置</button>;
 }
 
 function spaceSummary(account: P115Account): string | null {
