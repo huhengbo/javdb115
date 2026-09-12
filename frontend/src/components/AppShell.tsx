@@ -34,7 +34,7 @@ const pageTitles: Record<Tab, string> = {
 export function AppShell({ active, onChange, onLogout, onOpenSettings, children }: Props) {
   const online = useOnlineStatus();
   const keyboardVisible = useKeyboardVisible();
-  const usesLegacyPageHeading = active === 'rankings' || active === 'settings';
+  const usesLegacyPageHeading = active === 'settings';
 
   return (
     <div className={`min-h-dvh bg-mist ${keyboardVisible ? 'pb-0' : 'pb-[calc(4.5rem+env(safe-area-inset-bottom))]'}`}>
@@ -42,7 +42,7 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <div className="min-w-0">
             <p className="truncate text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">JAVDB 115</p>
-            {usesLegacyPageHeading ? <p className="truncate text-xs text-slate-500">{active === 'settings' ? '配置与偏好' : '榜单浏览'}</p> : <h1 className="truncate text-base font-semibold leading-5 text-ink">{pageTitles[active]}</h1>}
+            {usesLegacyPageHeading ? <p className="truncate text-xs text-slate-500">配置与偏好</p> : <h1 className="truncate text-base font-semibold leading-5 text-ink">{pageTitles[active]}</h1>}
           </div>
           <div className="flex items-center gap-1">
             <button aria-label="打开设置" className={`flex h-11 w-11 items-center justify-center rounded-full ${active === 'settings' ? 'bg-teal-50 text-brand' : 'text-slate-500 hover:bg-slate-100'}`} onClick={onOpenSettings} type="button"><Settings size={19} /></button>
