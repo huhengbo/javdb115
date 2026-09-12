@@ -53,13 +53,14 @@ test('settings preserve multiline filter drafts and save normalized values', asy
 
 test('directory picker uses enter-then-confirm mobile flow', async ({ page }) => {
   await page.goto('/settings');
-  await page.getByRole('button', { name: /115 下载临时目录/ }).click();
+  const downloadDirectory = page.getByRole('button', { name: /^下载临时目录/ });
+  await downloadDirectory.click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await page.getByRole('button', { name: /电影/ }).click();
   await expect(dialog).toContainText('根目录 / 电影');
   await page.getByRole('button', { name: '选择当前目录' }).click();
-  await expect(page.getByRole('button', { name: /115 下载临时目录/ })).toContainText('根目录 / 电影');
+  await expect(downloadDirectory).toContainText('根目录 / 电影');
 });
 
 test('theme selection persists and all supported widths avoid horizontal overflow', async ({ page }, testInfo) => {
