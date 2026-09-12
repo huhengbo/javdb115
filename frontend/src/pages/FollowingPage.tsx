@@ -129,9 +129,9 @@ export function FollowingPage() {
 
   return (
     <section>
-      <div className="flex min-h-10 items-center justify-between gap-3">
+      <div className="flex min-h-11 items-center justify-between gap-3">
         <p className="text-sm text-slate-500">{actorFollows.length} 位演员 · {movieFollows.length} 个作品</p>
-        <button aria-label="检查全部关注" className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-50" disabled={checking} onClick={() => void handleCheckAll()} type="button">
+        <button aria-label="检查全部关注" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-50" disabled={checking} onClick={() => void handleCheckAll()} type="button">
           {checking ? <Loader2 className="animate-spin" size={18} /> : <RefreshCw size={18} />}
         </button>
       </div>
@@ -140,7 +140,7 @@ export function FollowingPage() {
 
       {selectedCheck ? (
         <section className="mt-5">
-          <SectionHeader title={`${selectedCheck.actor_name} · ${selectedCheck.new_count} 部新作品`} trailing={<button className="min-h-10 px-1 text-sm text-slate-500" onClick={() => setSelectedCheck(null)} type="button">关闭</button>} />
+          <SectionHeader title={`${selectedCheck.actor_name} · ${selectedCheck.new_count} 部新作品`} trailing={<button className="min-h-11 px-1 text-sm text-slate-500" onClick={() => setSelectedCheck(null)} type="button">关闭</button>} />
           {selectedCheck.selected_tag_names.length ? <p className="mt-1 text-xs text-slate-400">{selectedCheck.selected_tag_names.join(' · ')}</p> : null}
           <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3">{selectedCheck.movies.map((movie) => <button className="text-left" key={movie.id} onClick={() => openMovie(movie.id)} type="button"><MoviePoster alt={movie.number} className="rounded-lg" src={movie.thumb_url} /><p className="mt-2 text-sm font-semibold text-ink">{movie.number}</p><p className="line-clamp-2 text-[13px] text-slate-500">{movie.title}</p></button>)}</div>
         </section>
@@ -202,7 +202,7 @@ function FollowRow(props: { readonly checking?: boolean; readonly disabled: bool
   const follow = props.follow;
   return (
     <article className={`quiet-list-item relative py-3 ${follow.enabled ? '' : 'opacity-55'}`}>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={props.onOpen} type="button">
           {props.movie ? <MoviePoster alt={follow.actor_name} className="h-16 w-12 shrink-0 rounded-md" src={follow.actor_avatar_url} /> : follow.actor_avatar_url ? <img alt={follow.actor_name} className="h-12 w-12 shrink-0 rounded-lg object-cover" decoding="async" loading="lazy" src={imgUrl(follow.actor_avatar_url)} /> : <span className="h-12 w-12 shrink-0 rounded-lg bg-slate-100" />}
           <span className="min-w-0 flex-1">
@@ -211,10 +211,10 @@ function FollowRow(props: { readonly checking?: boolean; readonly disabled: bool
             {follow.selected_tag_names.length ? <span className="mt-1 block truncate text-xs text-slate-500">{follow.selected_tag_names.join(' · ')}</span> : null}
           </span>
         </button>
-        {!props.movie ? <button aria-label={`检查 ${follow.actor_name}`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-50" disabled={props.checking || props.disabled} onClick={props.onCheck} type="button"><RefreshCw className={props.checking ? 'animate-spin' : ''} size={16} /></button> : null}
-        <button aria-expanded={menuOpen} aria-label={`更多操作 ${follow.actor_name}`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100" onClick={() => setMenuOpen((value) => !value)} type="button"><MoreHorizontal size={18} /></button>
+        {!props.movie ? <button aria-label={`检查 ${follow.actor_name}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-50" disabled={props.checking || props.disabled} onClick={props.onCheck} type="button"><RefreshCw className={props.checking ? 'animate-spin' : ''} size={16} /></button> : null}
+        <button aria-expanded={menuOpen} aria-label={`更多操作 ${follow.actor_name}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100" onClick={() => setMenuOpen((value) => !value)} type="button"><MoreHorizontal size={18} /></button>
       </div>
-      {menuOpen ? <div className="ml-[3.75rem] mt-2 grid gap-1 border-l border-line pl-3">{!props.movie ? <button className="flex min-h-9 items-center gap-2 text-left text-sm text-ink" onClick={() => { setMenuOpen(false); props.onEdit?.(); }} type="button"><Tags size={15} />编辑标签</button> : null}<button className="min-h-9 text-left text-sm text-ink disabled:opacity-50" disabled={props.disabled} onClick={() => { setMenuOpen(false); props.onToggle(); }} type="button">{follow.enabled ? '停用' : '启用'}</button><button className="flex min-h-9 items-center gap-2 text-left text-sm text-danger" onClick={() => { setMenuOpen(false); props.onDelete(); }} type="button"><Trash2 size={15} />删除</button></div> : null}
+      {menuOpen ? <div className="ml-[3.75rem] mt-2 grid gap-1 border-l border-line pl-3">{!props.movie ? <button className="flex min-h-11 items-center gap-2 text-left text-sm text-ink" onClick={() => { setMenuOpen(false); props.onEdit?.(); }} type="button"><Tags size={15} />编辑标签</button> : null}<button className="min-h-11 text-left text-sm text-ink disabled:opacity-50" disabled={props.disabled} onClick={() => { setMenuOpen(false); props.onToggle(); }} type="button">{follow.enabled ? '停用' : '启用'}</button><button className="flex min-h-11 items-center gap-2 text-left text-sm text-danger" onClick={() => { setMenuOpen(false); props.onDelete(); }} type="button"><Trash2 size={15} />删除</button></div> : null}
     </article>
   );
 }
