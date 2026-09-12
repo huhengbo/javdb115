@@ -46,6 +46,26 @@ export type Task = {
   magnet: Magnet | null;
 };
 
+export type TaskFilterValue =
+  | 'all'
+  | 'attention'
+  | 'submitted'
+  | 'downloading'
+  | 'organizing'
+  | 'completed'
+  | 'submit_failed'
+  | 'download_failed'
+  | 'organize_failed'
+  | 'incomplete_submit';
+
+export type TaskPage = {
+  items: Task[];
+  has_more: boolean;
+  next_cursor: number | null;
+  total: number;
+  counts: Record<TaskFilterValue, number>;
+};
+
 export type TaskEvent = {
   id: number;
   task_id: number;
