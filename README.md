@@ -1,6 +1,7 @@
 # javdb115
 
 [![CI](https://github.com/huhengbo/javdb115/actions/workflows/ci.yml/badge.svg)](https://github.com/huhengbo/javdb115/actions/workflows/ci.yml)
+[![Docker Release](https://github.com/huhengbo/javdb115/actions/workflows/docker-release.yml/badge.svg)](https://github.com/huhengbo/javdb115/actions/workflows/docker-release.yml)
 
 一个移动端优先的 JavDB 演员订阅与 115 离线下载自动化工具。项目提供 Web 管理界面，可完成作品发现、演员订阅、磁力筛选、115 离线任务提交、下载状态跟踪、媒体整理与 Telegram 通知。
 
@@ -16,8 +17,9 @@
 - 下载完成后自动整理文件、字幕和封面，生成 Emby 兼容 NFO。
 - 115 扫码登录和目录选择。
 - Telegram 通知与 Bot 命令。
-- Web 登录保护和 `/api/health` 健康检查。
-- Docker / Docker Compose 部署。
+- HttpOnly Cookie Web 会话、登录失败限流和基础安全响应头。
+- SQLite 版本化迁移、备份与恢复工具。
+- Docker / Docker Compose 部署，官方 GHCR 镜像同时支持 `linux/amd64` 与 `linux/arm64`。
 
 ## 技术栈
 
@@ -25,14 +27,25 @@
 | --- | --- |
 | Backend | Python 3.12+、FastAPI、Pydantic、SQLite、httpx |
 | Frontend | React 19、TypeScript、Vite、Tailwind CSS |
-| Quality | pytest、ruff、mypy、ESLint、TypeScript |
-| Deployment | Docker 多阶段构建、Docker Compose |
+| Quality | pytest、ruff、mypy、ESLint、TypeScript、Node test、E2E smoke |
+| Deployment | Docker Buildx、Docker Compose、GHCR、amd64 + arm64 |
 
 ## 快速开始
 
-### Docker Compose
+### 方式一：使用 GHCR 预构建镜像
 
-要求：Docker 与 Docker Compose v2。
+正式版本镜像发布到：
+
+```text
+ghcr.io/huhengbo/javdb115
+```
+
+支持平台：
+
+- `linux/amd64`：常见 Intel / AMD x86_64 服务器、NAS。
+- `linux/arm64`：Apple Silicon Linux VM、ARM NAS、ARM64 服务器等。
+
+准备配置：
 
 ```bash
 git clone https://github.com/huhengbo/javdb115.git
@@ -40,16 +53,28 @@ cd javdb115
 cp .env.example .env
 ```
 
-至少修改以下配置：
+至少修改：
 
 ```dotenv
 APP_ADMIN_PASSWORD=replace-with-a-strong-password
 APP_SECRET_KEY=replace-with-a-long-random-secret
+JAVDB115_IMAGE=ghcr.io/huhengbo/javdb115:latest
 ```
 
-启动：
+启动预构建镜像：
 
 ```bash
+docker compose pull
+docker compose up -d --no-build
+```
+
+### 方式二：从源码构建
+
+```bash
+git clone https://github.com/huhengbo/javdb115.git
+cd javdb115
+cp .env.example .env
+# 修改 APP_ADMIN_PASSWORD / APP_SECRET_KEY
 docker compose up -d --build
 ```
 
@@ -68,12 +93,21 @@ curl http://127.0.0.1:8080/api/health
 docker compose logs -f
 ```
 
-升级代码后重新构建：
+## Docker 镜像标签
 
-```bash
-git pull
-docker compose up -d --build
-```
+发布流水线会推送以下标签：
+
+| 场景 | 示例 |
+| --- | --- |
+| 默认分支最新构建 | `edge` |
+| Commit 可追踪版本 | `sha-<commit>` |
+| 正式版本 | `0.1.0` |
+| Major.Minor | `0.1` |
+| 最新正式版本 | `latest` |
+
+正式 Tag 必须与仓库根目录 `VERSION` 一致，例如 `VERSION=0.1.0` 对应 Git Tag `v0.1.0`。
+
+镜像在发布前会执行：漏洞扫描、健康检查、非 root 用户检查；最终通过 Buildx 同时构建 `linux/amd64` 和 `linux/arm64`，并附带 SBOM 与 provenance。
 
 ## 配置
 
@@ -83,11 +117,14 @@ docker compose up -d --build
 | --- | --- | --- | --- |
 | `APP_ADMIN_USERNAME` | 否 | `admin` | Web 管理员用户名 |
 | `APP_ADMIN_PASSWORD` | 是 | - | Web 管理员密码 |
-| `APP_SECRET_KEY` | 是 | - | 会话 Token 签名密钥 |
+| `APP_SECRET_KEY` | 是 | - | Session Token 哈希与安全相关密钥；生产环境请使用长随机值 |
 | `APP_DATABASE_PATH` | 否 | `data/app.sqlite3` | SQLite 数据库路径；Docker 中固定为 `/data/app.sqlite3` |
 | `APP_SESSION_TTL_HOURS` | 否 | `24` | 登录有效期（小时） |
+| `APP_SESSION_COOKIE_SECURE` | 否 | `false` | 使用 HTTPS 时建议设为 `true`，使 Session Cookie 只通过 HTTPS 发送 |
 | `APP_ACTOR_MOVIE_CHECK_LIMIT` | 否 | `3` | 单次演员订阅检查读取作品数量 |
 | `APP_HTTP_PORT` | 否 | `8080` | Docker Compose 暴露端口 |
+| `APP_UID` / `APP_GID` | 否 | `1000` | 本地构建镜像时应用进程 UID / GID |
+| `JAVDB115_IMAGE` | 否 | `javdb115:local` | Compose 使用的镜像；可设为 GHCR 正式镜像 |
 
 运行后可在 Web 设置页配置：
 
@@ -96,7 +133,44 @@ docker compose up -d --build
 - 磁力筛选规则。
 - Telegram Bot Token 与 Chat ID。
 
-不要提交 `.env`、SQLite 数据库、日志、截图、构建产物、115 Cookie 或 Telegram Token。
+115 Cookie 和 Telegram Bot Token 属于敏感设置。API 不会回显原值；Web 表单留空保存表示保持原值，只有重新输入时才会覆盖。
+
+## 从旧容器升级
+
+新版镜像使用非 root 用户运行。Docker Compose 默认 UID/GID 为 `1000:1000`。如果已有 `./data` 是由旧版 root 容器创建，升级前请确认目录可写：
+
+```bash
+sudo chown -R 1000:1000 ./data
+```
+
+如果需要使用其他宿主机 UID/GID，在 `.env` 中修改 `APP_UID` / `APP_GID` 后从源码重新构建镜像。
+
+升级前建议先备份数据库。
+
+## 数据库迁移、备份与恢复
+
+数据库启动时会按 `schema_migrations` 顺序执行版本化迁移。迁移具有幂等检查，升级失败会阻止应用继续以不一致结构运行。
+
+创建一致性 SQLite 备份：
+
+```bash
+cd backend
+python -m app.db_admin backup \
+  --database ../data/app.sqlite3 \
+  --output ../backup/app.sqlite3
+```
+
+恢复备份会覆盖目标数据库，因此必须显式传入 `--yes`：
+
+```bash
+cd backend
+python -m app.db_admin restore \
+  --database ../data/app.sqlite3 \
+  --input ../backup/app.sqlite3 \
+  --yes
+```
+
+Docker 部署也可以在停止容器后备份整个 `./data` 目录。
 
 ## 本地开发
 
@@ -127,26 +201,30 @@ npm run dev -- --host 0.0.0.0
 
 ```text
 javdb115/
-├── .github/                 # GitHub Actions、Issue / PR 模板、Dependabot
+├── .github/                 # Actions、Issue / PR 模板、Dependabot、CODEOWNERS
 ├── backend/
 │   ├── app/
 │   │   ├── adapters/        # JavDB、115、Telegram 外部适配器
 │   │   ├── api/             # FastAPI 路由
 │   │   ├── repositories/    # SQLite 数据访问
 │   │   ├── services/        # 核心业务流程
-│   │   └── schema.sql       # SQLite 表结构
+│   │   ├── migrations.py    # SQLite 顺序迁移
+│   │   ├── db_admin.py      # 备份 / 恢复 CLI
+│   │   └── schema.sql       # 最新 SQLite 表结构
 │   ├── tests/               # 后端测试
 │   ├── pyproject.toml
 │   └── uv.lock
 ├── frontend/
 │   ├── src/
-│   │   ├── components/
-│   │   ├── lib/
-│   │   └── pages/
+│   ├── tests/
 │   ├── package.json
 │   └── package-lock.json
+├── scripts/check_version.py
+├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── SECURITY.md
+├── VERSION
+├── LICENSE
 ├── Dockerfile
 ├── docker-compose.yml
 └── .env.example
@@ -154,32 +232,51 @@ javdb115/
 
 ## 质量检查
 
-提交 PR 前建议运行完整检查。
-
 Backend：
 
 ```bash
-backend/.venv/bin/ruff check backend/app backend/tests
+backend/.venv/bin/ruff check backend/app backend/tests scripts
 backend/.venv/bin/mypy backend/app
-backend/.venv/bin/python -m compileall -q backend/app backend/tests
+backend/.venv/bin/python -m compileall -q backend/app backend/tests scripts
 backend/.venv/bin/python -m pytest backend/tests -q
+python scripts/check_version.py
 ```
 
 Frontend：
 
 ```bash
 cd frontend
+npm ci
 npm run lint
+npm test
 npm run build
 ```
 
-GitHub Actions 会在 push 与 pull request 上执行同等检查，并验证 Docker 镜像能够成功构建。
+GitHub Actions 对 PR / `master` 自动执行：
 
-## 数据与备份
+1. Python 3.12 / 3.13 后端检查与测试。
+2. 前端 lint、测试与生产构建。
+3. 启动完整 Web 应用并验证 HttpOnly Cookie 登录流程。
+4. 使用 QEMU + Buildx 验证 `linux/amd64`、`linux/arm64` 两个平台的 Docker 构建。
 
-Docker Compose 默认将运行数据持久化到仓库目录下的 `./data`。升级或迁移前建议先备份该目录，尤其是 `app.sqlite3`。
+## 发布流程
+
+项目使用 SemVer。当前版本保存在根目录 `VERSION`，并由 CI 校验与 `backend/pyproject.toml`、`frontend/package.json` 一致。
+
+- 合并到 `master`：发布 `edge` 与 `sha-*` GHCR 镜像。
+- 推送 `vX.Y.Z` Tag：验证版本一致后发布 `X.Y.Z`、`X.Y`、`latest`、`sha-*`，并创建 GitHub Release。
+- 变更摘要维护在 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 安全
+
+- 浏览器登录使用 `HttpOnly`、`SameSite=Lax` Session Cookie，不再把 Session Token 保存到 `localStorage`。
+- 登录连续失败会触发临时限流/锁定。
+- 115 Cookie 和 Telegram Bot Token 不通过设置 API 回显。
+- 敏感键由服务端固定 allowlist 判定，不信任前端传入的 `is_secret`。
+- Docker 运行进程为非 root，并启用 `no-new-privileges`。
+
+> [!WARNING]
+> 当前 SQLite 数据库本身不是应用层加密数据库。115 Cookie、Telegram Token 等运行时凭据虽然不会通过 API 回显，但仍可能存在于数据库文件中。请限制 `data/` 和备份文件权限，不要把数据库同步到不可信位置，并妥善保护 `APP_SECRET_KEY`。
 
 如果发现安全问题，请不要直接提交包含利用细节、Cookie、Token 或其他敏感信息的公开 Issue。处理方式见 [SECURITY.md](SECURITY.md)。
 
@@ -193,4 +290,4 @@ Docker Compose 默认将运行数据持久化到仓库目录下的 `./data`。�
 
 ## License
 
-仓库目前尚未声明开源许可证。在许可证明确之前，代码默认受版权保护；相关决策会通过 GitHub Issue 跟踪。
+本项目采用 [MIT License](LICENSE)。
