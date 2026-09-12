@@ -76,6 +76,11 @@ textarea {
   font: inherit;
 }
 
+select {
+  background-color: var(--ui-surface);
+  color: var(--ui-text);
+}
+
 button,
 a,
 input,
@@ -154,7 +159,7 @@ a:active {
 .section-description { margin-top: 0.125rem; font-size: 0.8125rem; }
 
 .filter-chip {
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   flex-shrink: 0;
   border-radius: 0.5rem;
   padding: 0 0.75rem;
@@ -256,10 +261,6 @@ a:active {
 .border-amber-200 { border-color: var(--ui-border); }
 .ring-line { --tw-ring-color: var(--ui-border); }
 .rounded-lg { border-radius: var(--ui-radius-card); }
-
-[data-theme='graphite'] .shadow-sm,
-[data-theme='graphite'] .shadow-lg,
-[data-theme='graphite'] .shadow-xl { box-shadow: var(--ui-shadow-elevated); }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
