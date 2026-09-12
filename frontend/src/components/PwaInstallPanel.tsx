@@ -1,4 +1,4 @@
-import { Download, Share2, Smartphone } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 type InstallChoice = {
@@ -38,13 +38,11 @@ export function PwaInstallPanel() {
 
   if (installed) {
     return (
-      <section className="mb-4 rounded-lg border border-line bg-white p-4">
-        <div className="flex items-center gap-3">
-          <Smartphone className="shrink-0 text-brand" size={22} />
-          <div>
-            <h2 className="text-sm font-medium text-ink">已安装到手机</h2>
-            <p className="mt-1 text-xs text-slate-500">当前正以独立应用模式运行。</p>
-          </div>
+      <section aria-label="安装" className="settings-list-section">
+        <h2 className="settings-section-title">安装</h2>
+        <div className="settings-row">
+          <span className="settings-row-label">应用</span>
+          <span className="text-sm text-slate-500">已安装</span>
         </div>
       </section>
     );
@@ -52,20 +50,11 @@ export function PwaInstallPanel() {
 
   if (installPrompt) {
     return (
-      <section className="mb-4 rounded-lg border border-line bg-white p-4">
-        <div className="flex items-start gap-3">
-          <Download className="mt-0.5 shrink-0 text-brand" size={22} />
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-medium text-ink">安装到手机</h2>
-            <p className="mt-1 text-xs text-slate-500">安装后可从桌面图标直接打开，不需要先进入浏览器。</p>
-            <button
-              className="mt-3 min-h-11 w-full rounded-md bg-brand px-4 text-sm font-medium text-white"
-              onClick={() => void requestInstall(installPrompt, setInstallPrompt)}
-              type="button"
-            >
-              安装应用
-            </button>
-          </div>
+      <section aria-label="安装" className="settings-list-section">
+        <h2 className="settings-section-title">安装</h2>
+        <div className="settings-row">
+          <span className="settings-row-label">安装到手机</span>
+          <button className="flex min-h-11 items-center gap-1.5 px-1 text-sm font-medium text-brand" onClick={() => void requestInstall(installPrompt, setInstallPrompt)} type="button"><Download size={16} />安装</button>
         </div>
       </section>
     );
@@ -73,13 +62,11 @@ export function PwaInstallPanel() {
 
   if (isIosDevice()) {
     return (
-      <section className="mb-4 rounded-lg border border-line bg-white p-4">
-        <div className="flex items-start gap-3">
-          <Share2 className="mt-0.5 shrink-0 text-brand" size={22} />
-          <div>
-            <h2 className="text-sm font-medium text-ink">添加到 iPhone / iPad 主屏幕</h2>
-            <p className="mt-1 text-xs leading-5 text-slate-500">在 Safari 中点“分享”，再选择“添加到主屏幕”。</p>
-          </div>
+      <section aria-label="安装" className="settings-list-section">
+        <h2 className="settings-section-title">安装</h2>
+        <div className="settings-row items-start py-3">
+          <span className="settings-row-label">添加到主屏幕</span>
+          <span className="max-w-[12rem] text-right text-xs leading-5 text-slate-500">Safari 分享 → 添加到主屏幕</span>
         </div>
       </section>
     );

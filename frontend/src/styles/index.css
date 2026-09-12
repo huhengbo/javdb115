@@ -5,17 +5,17 @@
 :root,
 [data-theme='harbor'] {
   color-scheme: light;
-  --ui-canvas: #f4f7f8;
+  --ui-canvas: #f7f8f8;
   --ui-surface: #ffffff;
-  --ui-surface-muted: #eef3f3;
+  --ui-surface-muted: #f1f3f3;
   --ui-surface-elevated: #ffffff;
-  --ui-surface-strong: #0f172a;
-  --ui-text: #172026;
-  --ui-text-muted: #64748b;
-  --ui-text-tertiary: #8a99a8;
-  --ui-border: #d7e0e2;
+  --ui-surface-strong: #111827;
+  --ui-text: #182126;
+  --ui-text-muted: #66747d;
+  --ui-text-tertiary: #94a0a8;
+  --ui-border: #dde3e5;
   --ui-accent: #0f766e;
-  --ui-accent-muted: #ccfbf1;
+  --ui-accent-muted: #dff5f1;
   --ui-focus: #0f766e;
   --ui-warning: #b45309;
   --ui-danger: #b42318;
@@ -24,24 +24,24 @@
   --ui-success-surface: #ecfdf5;
   --ui-warning-surface: #fffbeb;
   --ui-info-surface: #eff6ff;
-  --ui-radius-card: 0.75rem;
-  --ui-shadow-elevated: 0 14px 36px rgb(15 23 42 / 0.12);
+  --ui-radius-card: 0.625rem;
+  --ui-shadow-elevated: 0 16px 36px rgb(15 23 42 / 0.14);
 }
 
 [data-theme='graphite'] {
   color-scheme: dark;
-  --ui-canvas: #0f141a;
-  --ui-surface: #182028;
-  --ui-surface-muted: #202a34;
-  --ui-surface-elevated: #202a34;
-  --ui-surface-strong: #090d12;
-  --ui-text: #f1f5f9;
-  --ui-text-muted: #a8b3c2;
-  --ui-text-tertiary: #7f8c9d;
-  --ui-border: #34414e;
-  --ui-accent: #2dd4bf;
-  --ui-accent-muted: #163c3b;
-  --ui-focus: #2dd4bf;
+  --ui-canvas: #101417;
+  --ui-surface: #171c20;
+  --ui-surface-muted: #20262b;
+  --ui-surface-elevated: #20262b;
+  --ui-surface-strong: #090d10;
+  --ui-text: #edf2f4;
+  --ui-text-muted: #a9b4bb;
+  --ui-text-tertiary: #74818a;
+  --ui-border: #303941;
+  --ui-accent: #38cbbd;
+  --ui-accent-muted: #153b37;
+  --ui-focus: #38cbbd;
   --ui-warning: #f59e0b;
   --ui-danger: #fb7185;
   --ui-success: #34d399;
@@ -49,58 +49,8 @@
   --ui-success-surface: #123a31;
   --ui-warning-surface: #3d3117;
   --ui-info-surface: #173052;
-  --ui-radius-card: 0.75rem;
-  --ui-shadow-elevated: 0 16px 42px rgb(0 0 0 / 0.38);
-}
-
-[data-theme='paper'] {
-  color-scheme: light;
-  --ui-canvas: #f6f0e6;
-  --ui-surface: #fffaf2;
-  --ui-surface-muted: #f0e6d7;
-  --ui-surface-elevated: #fffdf8;
-  --ui-surface-strong: #4a3525;
-  --ui-text: #35291e;
-  --ui-text-muted: #796a5c;
-  --ui-text-tertiary: #9a8876;
-  --ui-border: #d7c4aa;
-  --ui-accent: #92400e;
-  --ui-accent-muted: #ffedd5;
-  --ui-focus: #92400e;
-  --ui-warning: #a16207;
-  --ui-danger: #9f1239;
-  --ui-success: #3f6212;
-  --ui-danger-surface: #fff1f2;
-  --ui-success-surface: #f7fee7;
-  --ui-warning-surface: #fefce8;
-  --ui-info-surface: #fff7ed;
   --ui-radius-card: 0.625rem;
-  --ui-shadow-elevated: 0 12px 28px rgb(53 41 30 / 0.12);
-}
-
-[data-theme='blueprint'] {
-  color-scheme: light;
-  --ui-canvas: #eff6ff;
-  --ui-surface: #ffffff;
-  --ui-surface-muted: #e0ecff;
-  --ui-surface-elevated: #ffffff;
-  --ui-surface-strong: #0f2c59;
-  --ui-text: #102a43;
-  --ui-text-muted: #486581;
-  --ui-text-tertiary: #6686a5;
-  --ui-border: #7ca5d8;
-  --ui-accent: #1e40af;
-  --ui-accent-muted: #dbeafe;
-  --ui-focus: #1d4ed8;
-  --ui-warning: #92400e;
-  --ui-danger: #b91c1c;
-  --ui-success: #166534;
-  --ui-danger-surface: #fef2f2;
-  --ui-success-surface: #f0fdf4;
-  --ui-warning-surface: #fffbeb;
-  --ui-info-surface: #dbeafe;
-  --ui-radius-card: 0.5rem;
-  --ui-shadow-elevated: 0 12px 30px rgb(30 64 175 / 0.14);
+  --ui-shadow-elevated: 0 18px 42px rgb(0 0 0 / 0.4);
 }
 
 html {
@@ -115,14 +65,8 @@ body {
   min-width: 320px;
   background: var(--ui-canvas);
   color: var(--ui-text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.5;
-}
-
-[data-theme='paper'] h1,
-[data-theme='paper'] h2,
-[data-theme='paper'] h3 {
-  font-family: Georgia, "Times New Roman", serif;
 }
 
 button,
@@ -132,23 +76,24 @@ textarea {
   font: inherit;
 }
 
+select {
+  background-color: var(--ui-surface);
+  color: var(--ui-text);
+}
+
 button,
 a,
 input,
 select,
 textarea {
   transition-property: color, background-color, border-color, opacity, box-shadow, transform;
-  transition-duration: 160ms;
+  transition-duration: 140ms;
   transition-timing-function: ease-out;
 }
 
 button:not(:disabled):active,
 a:active {
-  opacity: 0.88;
-}
-
-button:not(:disabled):active {
-  transform: scale(0.985);
+  opacity: 0.84;
 }
 
 :focus-visible {
@@ -161,7 +106,6 @@ button:not(:disabled):active {
   color: var(--ui-text);
 }
 
-/* Semantic UI primitives. Keep these lightweight so existing Tailwind markup can migrate gradually. */
 .ui-surface,
 .ui-surface-elevated {
   border-radius: var(--ui-radius-card);
@@ -169,7 +113,7 @@ button:not(:disabled):active {
 }
 
 .ui-surface {
-  border: 1px solid color-mix(in srgb, var(--ui-border) 68%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ui-border) 72%, transparent);
 }
 
 .ui-surface-elevated {
@@ -177,41 +121,33 @@ button:not(:disabled):active {
   box-shadow: var(--ui-shadow-elevated);
 }
 
-.page-header {
+.page-header,
+.section-header {
   display: flex;
-  min-height: 3rem;
-  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
 }
+
+.page-header { min-height: 2.75rem; align-items: flex-start; }
+.section-header { align-items: center; }
 
 .page-title {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.375rem;
   font-weight: 700;
   line-height: 1.25;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   color: var(--ui-text);
 }
 
-.page-description {
-  margin-top: 0.25rem;
-  font-size: 0.875rem;
+.page-description,
+.page-meta,
+.section-description {
   color: var(--ui-text-muted);
 }
 
-.page-meta {
-  margin-top: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--ui-text-tertiary);
-}
-
-.section-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
+.page-description { margin-top: 0.25rem; font-size: 0.875rem; }
+.page-meta { margin-top: 0.25rem; font-size: 0.75rem; color: var(--ui-text-tertiary); }
 
 .section-title {
   margin: 0;
@@ -220,18 +156,14 @@ button:not(:disabled):active {
   color: var(--ui-text);
 }
 
-.section-description {
-  margin-top: 0.125rem;
-  font-size: 0.8125rem;
-  color: var(--ui-text-muted);
-}
+.section-description { margin-top: 0.125rem; font-size: 0.8125rem; }
 
 .filter-chip {
   min-height: 2.75rem;
   flex-shrink: 0;
-  border-radius: 9999px;
-  padding: 0 0.875rem;
-  background: var(--ui-surface-muted);
+  border-radius: 0.5rem;
+  padding: 0 0.75rem;
+  background: transparent;
   color: var(--ui-text-muted);
   font-size: 0.8125rem;
   font-weight: 600;
@@ -240,11 +172,10 @@ button:not(:disabled):active {
 .filter-chip-selected {
   background: var(--ui-accent-muted);
   color: var(--ui-accent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 22%, transparent);
 }
 
 .inline-alert {
-  border-radius: var(--ui-radius-card);
+  border-radius: 0.5rem;
   padding: 0.75rem 0.875rem;
   font-size: 0.875rem;
 }
@@ -255,9 +186,7 @@ button:not(:disabled):active {
 .inline-alert-info { background: var(--ui-info-surface); color: var(--ui-text); }
 
 .empty-state {
-  border-radius: var(--ui-radius-card);
-  background: var(--ui-surface-muted);
-  padding: 1rem;
+  padding: 1.5rem 1rem;
   text-align: center;
   color: var(--ui-text-muted);
 }
@@ -266,7 +195,7 @@ button:not(:disabled):active {
   min-height: 2.75rem;
   width: 100%;
   border: 1px solid var(--ui-border);
-  border-radius: 0.625rem;
+  border-radius: 0.5rem;
   background: var(--ui-surface);
   padding: 0 0.75rem;
   color: var(--ui-text);
@@ -275,7 +204,33 @@ button:not(:disabled):active {
 .field-control::placeholder { color: var(--ui-text-tertiary); }
 .field-control:focus { border-color: var(--ui-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 12%, transparent); outline: none; }
 
-/* Keep existing Tailwind markup themeable without duplicating React trees. */
+.settings-list-section { margin-top: 0.25rem; }
+.settings-section-title {
+  margin: 0 0 0.5rem;
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--ui-text-muted);
+}
+.settings-row {
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+  padding: 0.5rem 0.25rem;
+}
+.settings-row-label { font-size: 0.875rem; font-weight: 550; color: var(--ui-text); }
+.appearance-toggle { display: flex; align-items: center; gap: 0.125rem; border-radius: 0.5rem; background: var(--ui-surface-muted); padding: 0.125rem; }
+.appearance-toggle-item { display: flex; min-height: 2.75rem; align-items: center; gap: 0.25rem; border-radius: 0.375rem; padding: 0 0.5rem; font-size: 0.75rem; color: var(--ui-text-muted); }
+.appearance-toggle-item-selected { background: var(--ui-surface); color: var(--ui-text); box-shadow: 0 1px 2px rgb(15 23 42 / 0.08); }
+
+.quiet-list { border-top: 1px solid var(--ui-border); }
+.quiet-list-item { border-bottom: 1px solid var(--ui-border); }
+
+/* Keep existing Tailwind markup themeable while pages migrate to quieter primitives. */
 .bg-white,
 .bg-white\/95 { background-color: var(--ui-surface); }
 .bg-slate-50,
@@ -306,17 +261,6 @@ button:not(:disabled):active {
 .border-amber-200 { border-color: var(--ui-border); }
 .ring-line { --tw-ring-color: var(--ui-border); }
 .rounded-lg { border-radius: var(--ui-radius-card); }
-
-[data-theme='graphite'] .shadow-sm,
-[data-theme='graphite'] .shadow-lg,
-[data-theme='graphite'] .shadow-xl { box-shadow: var(--ui-shadow-elevated); }
-[data-theme='paper'] .shadow-sm,
-[data-theme='paper'] .shadow-lg,
-[data-theme='paper'] .shadow-xl { box-shadow: var(--ui-shadow-elevated); }
-
-@media (max-width: 639px) {
-  .page-title { font-size: 1.375rem; }
-}
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

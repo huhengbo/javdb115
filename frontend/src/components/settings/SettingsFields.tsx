@@ -12,15 +12,15 @@ export type FieldProps = {
   readonly onChange: (key: string, value: string) => void;
 };
 
-export function SettingsGroup(props: { readonly caption: string; readonly children: ReactNode; readonly title: string }) {
+export function SettingsGroup(props: { readonly caption?: string; readonly children: ReactNode; readonly title: string }) {
   const [expanded, setExpanded] = useState(props.title === '115 账号' || props.title === '目录');
   return (
-    <section className="rounded-xl bg-white shadow-sm ring-1 ring-line">
-      <button aria-expanded={expanded} className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left" onClick={() => setExpanded((current) => !current)} type="button">
-        <span className="min-w-0 flex-1"><span className="block text-base font-semibold text-ink">{props.title}</span><span className="mt-0.5 block text-xs text-slate-500">{props.caption}</span></span>
-        <ChevronDown className={`shrink-0 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} size={18} />
+    <section className="border-b border-line">
+      <button aria-expanded={expanded} className="flex min-h-14 w-full items-center gap-3 py-3 text-left" onClick={() => setExpanded((current) => !current)} type="button">
+        <span className="min-w-0 flex-1 text-sm font-semibold text-ink">{props.title}</span>
+        <ChevronDown className={`shrink-0 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} size={17} />
       </button>
-      {expanded ? <div className="space-y-3 border-t border-line px-4 pb-4 pt-4">{props.children}</div> : null}
+      {expanded ? <div className="space-y-4 pb-5">{props.children}</div> : null}
     </section>
   );
 }
@@ -31,7 +31,7 @@ export function CookieField(props: FieldProps) {
 
 export function TelegramFields(props: FieldProps) {
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-4">
       <TextAreaField fieldKey="telegram_bot_token" label="Bot Token" placeholder="输入新值以设置或覆盖现有 Token" rowsClassName="min-h-16" values={props.values} onChange={props.onChange} />
       <SingleLineField fieldKey="telegram_chat_id" label="Chat ID（可空）" values={props.values} onChange={props.onChange} />
     </div>
@@ -79,7 +79,7 @@ function TextAreaField(props: FieldProps & { readonly fieldKey: string; readonly
 
 function StructuredFilterRules({ onChange, rules }: { readonly onChange: (value: string) => void; readonly rules: FilterRules }) {
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-4">
       <NumberRuleField value={rules.min_size_gb} onCommit={(value) => updateRules(onChange, rules, { min_size_gb: value })} />
       <KeywordField label="必须包含关键词" value={rules.required_keywords} onChange={(keywords) => updateRules(onChange, rules, { required_keywords: keywords })} />
       <KeywordField label="排除关键词" value={rules.excluded_keywords} onChange={(keywords) => updateRules(onChange, rules, { excluded_keywords: keywords })} />

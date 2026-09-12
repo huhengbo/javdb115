@@ -1,16 +1,21 @@
 /* global window */
 (() => {
-  const valid = new Set(['system', 'harbor', 'graphite', 'paper', 'blueprint']);
   let preference = 'system';
   try {
     const stored = localStorage.getItem('javdb115-theme');
-    if (stored && valid.has(stored)) preference = stored;
+    if (stored === 'system' || stored === 'light' || stored === 'dark') preference = stored;
+    else if (stored === 'graphite') preference = 'dark';
+    else if (stored === 'harbor' || stored === 'paper' || stored === 'blueprint') preference = 'light';
   } catch {
     // Storage is optional.
   }
-  const resolved = preference === 'system'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'graphite' : 'harbor')
-    : preference;
+
+  const resolved = preference === 'dark'
+    ? 'graphite'
+    : preference === 'light'
+      ? 'harbor'
+      : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'graphite' : 'harbor');
+
   document.documentElement.dataset.theme = resolved;
   document.documentElement.dataset.themePreference = preference;
 })();

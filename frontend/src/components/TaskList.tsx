@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ChevronDown, Loader2, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Loader2, Trash2 } from 'lucide-react';
 import { useState, type MouseEvent } from 'react';
 import { client } from '../api';
 import { movieIdFromSourceUrl } from '../lib/javdb';
@@ -25,47 +25,38 @@ type Props = {
   compact?: boolean;
 };
 
-const TIMELINE_STEPS = ['提交', '下载', '整理', '完成'] as const;
-
 export function TaskList({ tasks, onChanged, compact = false }: Props) {
   const deletion = useTaskDeletion(onChanged);
   const navigation = useMovieNavigation();
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
-  if (tasks.length === 0) {
-    return <EmptyState title="暂无任务" description="新的离线或整理任务会显示在这里。" />;
-  }
+  if (tasks.length === 0) return <EmptyState title="暂无任务" />;
 
   function toggleExpanded(id: number) {
     if (compact) return;
     setExpandedIds((current) => {
       const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   }
 
   return (
     <>
-      <div className={compact ? 'space-y-2' : 'space-y-3'}>
+      <div className="quiet-list">
         {tasks.map((task) => {
           const expanded = expandedIds.has(task.id);
           const failed = taskIssueKind(task) !== 'none' || task.status === 'failed';
           return (
-            <article
-              key={task.id}
-              className={`overflow-hidden rounded-xl bg-white shadow-sm ring-1 ${failed ? 'ring-red-100' : 'ring-line/60'} ${compact ? '' : 'cursor-pointer'}`}
-              onClick={() => toggleExpanded(task.id)}
-            >
-              <div className={compact ? 'p-3' : 'p-4'}>
+            <article key={task.id} className={`quiet-list-item ${compact ? '' : 'cursor-pointer'}`} onClick={() => toggleExpanded(task.id)}>
+              <div className="py-3">
                 <TaskHeader compact={compact} expanded={expanded} task={task} onOpenMovie={navigation.openMovie} />
-                {!compact && (task.status !== 'completed' || expanded) ? <TaskTimeline task={task} /> : null}
+                {!compact && task.status !== 'completed' ? <TaskProgress task={task} /> : null}
+                {failed ? <div className="mt-3"><TaskIssueBlock task={task} compact={!expanded} /></div> : null}
+                {!compact && task.status === 'failed' && !expanded ? <RetryButton taskId={task.id} onChanged={onChanged} /> : null}
               </div>
-              {failed ? <div className={`px-4 ${expanded ? 'pb-0' : 'pb-3'}`}><TaskIssueBlock task={task} compact={!expanded} /></div> : null}
-              {!compact && task.status === 'failed' && !expanded ? <div className="px-4 pb-3"><RetryButton taskId={task.id} onChanged={onChanged} /></div> : null}
               {!compact && expanded ? (
-                <div className="border-t border-line/60 px-4 pb-4 pt-3">
+                <div className="border-t border-line pb-4 pt-3">
                   <TaskDetails task={task} />
                   {task.status === 'failed' ? <RetryButton taskId={task.id} onChanged={onChanged} /> : null}
                   <DeleteButton task={task} onClick={() => deletion.open(task)} />
@@ -75,9 +66,7 @@ export function TaskList({ tasks, onChanged, compact = false }: Props) {
           );
         })}
       </div>
-      {deletion.task ? (
-        <ConfirmDialog danger busy={deletion.busy} confirmLabel="删除" description={<DeleteDescription error={deletion.error} task={deletion.task} />} title="删除任务记录" onCancel={deletion.close} onConfirm={deletion.confirm} />
-      ) : null}
+      {deletion.task ? <ConfirmDialog danger busy={deletion.busy} confirmLabel="删除" description={<DeleteDescription error={deletion.error} task={deletion.task} />} title="删除任务记录" onCancel={deletion.close} onConfirm={deletion.confirm} /> : null}
     </>
   );
 }
@@ -114,15 +103,10 @@ function useTaskDeletion(onChanged?: () => void) {
   return { busy, close, confirm, error, open, task };
 }
 
-function TaskHeader(props: {
-  readonly compact: boolean;
-  readonly expanded: boolean;
-  readonly task: Task;
-  readonly onOpenMovie: (movieId: string) => void;
-}) {
+function TaskHeader(props: { readonly compact: boolean; readonly expanded: boolean; readonly task: Task; readonly onOpenMovie: (movieId: string) => void }) {
   const movieId = movieIdFromSourceUrl(props.task.work?.source_url);
   const code = props.task.work?.code ?? `任务 #${props.task.id}`;
-  const poster = <MoviePoster alt={code} className={`${props.compact ? 'h-16 w-11' : 'h-20 w-14'} shrink-0 rounded-lg`} src={props.task.work?.cover_url} />;
+  const poster = <MoviePoster alt={code} className={`${props.compact ? 'h-16 w-11' : 'h-[4.5rem] w-[3.15rem]'} shrink-0 rounded-md`} src={props.task.work?.cover_url} />;
 
   function openMovie(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
@@ -131,41 +115,26 @@ function TaskHeader(props: {
 
   return (
     <div className="flex items-start gap-3">
-      {movieId ? <button aria-label={`查看作品 ${code}`} className="shrink-0 rounded-lg active:scale-[0.98]" onClick={openMovie} type="button">{poster}</button> : poster}
+      {movieId ? <button aria-label={`查看作品 ${code}`} className="shrink-0" onClick={openMovie} type="button">{poster}</button> : poster}
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          {movieId ? (
-            <button className="min-w-0 truncate text-left text-sm font-semibold text-ink underline-offset-2 hover:text-brand hover:underline active:text-brand sm:text-base" onClick={openMovie} type="button">{code}</button>
-          ) : (
-            <h3 className="min-w-0 truncate text-sm font-semibold text-ink sm:text-base">{code}</h3>
-          )}
+          {movieId ? <button className="min-w-0 truncate text-left text-sm font-semibold text-ink hover:text-brand" onClick={openMovie} type="button">{code}</button> : <h3 className="min-w-0 truncate text-sm font-semibold text-ink">{code}</h3>}
           <StatusPill value={props.task.status} />
         </div>
-        <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-slate-500">{props.task.work?.title ?? taskStageLabel(props.task.stage)}</p>
-        <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-slate-400">
-          <span className="truncate">{taskStageLabel(props.task.stage)} · {formatRelativeTime(props.task.updated_at)}</span>
-          {!props.compact ? <ChevronDown className={`shrink-0 transition-transform ${props.expanded ? 'rotate-180' : ''}`} size={16} /> : null}
+        <p className="mt-1 line-clamp-2 text-[13px] leading-[1.35rem] text-slate-500">{props.task.work?.title ?? taskStageLabel(props.task.stage)}</p>
+        <div className="mt-1 flex items-center justify-between gap-2 text-xs text-slate-400">
+          <span className="truncate">{formatRelativeTime(props.task.updated_at)}</span>
+          {!props.compact ? <ChevronDown className={`shrink-0 transition-transform ${props.expanded ? 'rotate-180' : ''}`} size={15} /> : null}
         </div>
       </div>
     </div>
   );
 }
 
-function TaskTimeline({ task }: { readonly task: Task }) {
-  const activeStep = taskProgressStep(task);
-  return (
-    <div className="mt-3 grid grid-cols-4 gap-1.5">
-      {TIMELINE_STEPS.map((step, index) => {
-        const reached = activeStep > index;
-        return (
-          <div className="min-w-0" key={step}>
-            <div className={`h-1 rounded-full ${reached ? 'bg-brand' : 'bg-slate-100'}`} />
-            <p className={`mt-1 text-center text-[11px] ${reached ? 'font-medium text-brand' : 'text-slate-400'}`}>{reached ? <Check className="mr-0.5 inline" size={11} /> : null}{step}</p>
-          </div>
-        );
-      })}
-    </div>
-  );
+function TaskProgress({ task }: { readonly task: Task }) {
+  const step = Math.max(0, Math.min(4, taskProgressStep(task)));
+  const width = `${(step / 4) * 100}%`;
+  return <div className="mt-2.5 ml-[4.05rem]"><div className="h-1 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-brand transition-[width]" style={{ width }} /></div><p className="mt-1 text-[11px] text-slate-400">{taskStageLabel(task.stage)}</p></div>;
 }
 
 function TaskDetails({ task }: { readonly task: Task }) {
@@ -204,11 +173,11 @@ function directoryLabel(task: Task): string {
 }
 
 function DeleteButton({ task, onClick }: { readonly task: Task; readonly onClick: () => void }) {
-  return <button aria-label={`删除任务 ${task.work?.code ?? task.id}`} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-red-50 px-3 text-sm font-medium text-danger" onClick={(event) => { event.stopPropagation(); onClick(); }} type="button"><Trash2 size={16} />删除记录</button>;
+  return <button aria-label={`删除任务 ${task.work?.code ?? task.id}`} className="mt-4 flex min-h-11 items-center gap-2 text-sm font-medium text-danger" onClick={(event) => { event.stopPropagation(); onClick(); }} type="button"><Trash2 size={16} />删除记录</button>;
 }
 
 function DeleteDescription({ error, task }: { readonly error: string | null; readonly task: Task }) {
-  return <div className="space-y-2"><p>确认删除 {task.work?.code ?? `任务 #${task.id}`} 的本地任务记录？</p><p className="text-xs text-slate-500">这不会取消 115 离线任务，也不会删除 115 网盘文件。</p>{error ? <p className="rounded-md bg-red-50 p-2 text-xs text-danger" role="alert">{error}</p> : null}</div>;
+  return <div className="space-y-2"><p>确认删除 {task.work?.code ?? `任务 #${task.id}`} 的本地任务记录？</p><p className="text-xs text-slate-500">不会取消 115 离线任务，也不会删除网盘文件。</p>{error ? <p className="rounded-md bg-red-50 p-2 text-xs text-danger" role="alert">{error}</p> : null}</div>;
 }
 
 function RetryButton({ taskId, onChanged }: { readonly taskId: number; readonly onChanged?: () => void }) {
@@ -231,7 +200,7 @@ function RetryButton({ taskId, onChanged }: { readonly taskId: number; readonly 
 
   return (
     <div className="mt-3">
-      <button className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-50 px-3 text-sm font-medium text-ink disabled:opacity-60" disabled={isRetrying} onClick={(event) => { event.stopPropagation(); void retry(); }} type="button">{isRetrying ? <Loader2 className="animate-spin" size={16} /> : null}{isRetrying ? '重试中' : '手动重试'}</button>
+      <button className="flex min-h-11 items-center gap-2 text-sm font-medium text-brand disabled:opacity-60" disabled={isRetrying} onClick={(event) => { event.stopPropagation(); void retry(); }} type="button">{isRetrying ? <Loader2 className="animate-spin" size={16} /> : null}{isRetrying ? '重试中' : '手动重试'}</button>
       {error ? <p className="mt-2 rounded-md bg-red-50 p-3 text-sm text-danger" role="alert">{error}</p> : null}
     </div>
   );

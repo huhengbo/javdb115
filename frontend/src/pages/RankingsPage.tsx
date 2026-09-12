@@ -1,4 +1,4 @@
-import { Film, Filter, Loader2, Play, Trophy, Users, X } from 'lucide-react';
+import { Filter, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { client } from '../api';
 import { ActorDetailSheet } from '../components/discovery/ActorDetailSheet';
@@ -14,10 +14,10 @@ const TOP250_MAX_PAGES = 5;
 const TOP250_START_YEAR = 2008;
 
 const BOARDS = [
-  { value: 'movies', label: '作品', icon: Film },
-  { value: 'playback', label: '热播', icon: Play },
-  { value: 'actors', label: '演员', icon: Users },
-  { value: 'top250', label: 'TOP250', icon: Trophy }
+  { value: 'movies', label: '作品' },
+  { value: 'playback', label: '热播' },
+  { value: 'actors', label: '演员' },
+  { value: 'top250', label: 'TOP250' }
 ] as const;
 
 const CATEGORIES = [
@@ -88,31 +88,24 @@ export function RankingsPage() {
       if (filters.board === 'movies') {
         const result = await client.rankings(filters.category, filters.period);
         if (seq !== requestSeq.current) return;
-        setActors([]);
-        setMovies(result);
+        setActors([]); setMovies(result);
       } else if (filters.board === 'playback') {
         const result = await client.rankingsPlayback(filters.period, filters.filterBy);
         if (seq !== requestSeq.current) return;
-        setActors([]);
-        setMovies(result);
+        setActors([]); setMovies(result);
       } else if (filters.board === 'actors') {
         const result = await client.rankingsActors(filters.category);
         if (seq !== requestSeq.current) return;
-        setMovies([]);
-        setActors(result);
+        setMovies([]); setActors(result);
       } else {
         const result = await client.moviesTop(1, TOP250_PAGE_SIZE, filters.topType, filters.topValue);
         if (seq !== requestSeq.current) return;
-        setActors([]);
-        setMovies(result);
-        setHasMore(result.length === TOP250_PAGE_SIZE);
+        setActors([]); setMovies(result); setHasMore(result.length === TOP250_PAGE_SIZE);
       }
       window.scrollTo({ top: 0 });
     } catch (err) {
       if (seq !== requestSeq.current) return;
-      setMovies([]);
-      setActors([]);
-      setError((err as Error).message);
+      setMovies([]); setActors([]); setError((err as Error).message);
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
@@ -141,9 +134,7 @@ export function RankingsPage() {
   useEffect(() => {
     const element = loaderRef.current;
     if (!element || filters.board !== 'top250') return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) void loadMoreTop();
-    }, { rootMargin: '320px 0px', threshold: 0.01 });
+    const observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) void loadMoreTop(); }, { rootMargin: '320px 0px', threshold: 0.01 });
     observer.observe(element);
     return () => observer.disconnect();
   }, [filters.board, loadMoreTop]);
@@ -151,11 +142,11 @@ export function RankingsPage() {
   return (
     <section>
       <BoardTabs board={filters.board} onChange={(board) => setFilters((current) => normalizeFilters({ ...current, board }))} />
-      <div className="mt-2 flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 border-b border-line py-2">
         <p className="min-w-0 truncate text-xs text-slate-500">{filterSummary(filters)}</p>
-        <button className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-white px-3 text-sm font-medium text-ink shadow-sm ring-1 ring-line" onClick={() => setFilterOpen(true)} type="button"><Filter size={15} />筛选</button>
+        <button className="flex min-h-11 shrink-0 items-center gap-1.5 px-1 text-sm font-medium text-brand" onClick={() => setFilterOpen(true)} type="button"><Filter size={15} />筛选</button>
       </div>
-      {error ? <InlineAlert className="mt-3" tone="danger"><p>{error}</p><button className="mt-2 min-h-10 rounded-lg bg-white px-3 text-xs font-medium text-ink" onClick={() => void loadRankings()} type="button">重试</button></InlineAlert> : null}
+      {error ? <InlineAlert className="mt-3" tone="danger"><p>{error}</p><button className="mt-2 min-h-11 text-xs font-medium text-brand" onClick={() => void loadRankings()} type="button">重试</button></InlineAlert> : null}
       {loading ? <LoadingState board={filters.board} /> : null}
       {!loading && !error && (filters.board === 'movies' || filters.board === 'playback' || filters.board === 'top250') ? <MovieRankingList hasMore={filters.board === 'top250' && hasMore} loadingMore={loadingMore} loaderRef={loaderRef} movies={movies} onOpen={openMovie} showLoader={filters.board === 'top250'} /> : null}
       {!loading && !error && filters.board === 'actors' ? <ActorRankingList actors={actors} onOpen={openActor} /> : null}
@@ -168,17 +159,10 @@ export function RankingsPage() {
 
 function BoardTabs(props: { readonly board: RankingBoard; readonly onChange: (board: RankingBoard) => void }) {
   return (
-    <div className="grid grid-cols-4 rounded-xl bg-slate-100 p-1">
-      {BOARDS.map((board) => {
-        const Icon = board.icon;
-        return <ModeButton active={props.board === board.value} icon={<Icon size={16} />} key={board.value} label={board.label} onClick={() => props.onChange(board.value)} />;
-      })}
+    <div className="grid grid-cols-4 border-b border-line">
+      {BOARDS.map((board) => <button aria-pressed={props.board === board.value} className={`relative min-h-11 text-sm font-medium ${props.board === board.value ? 'text-ink' : 'text-slate-500'}`} key={board.value} onClick={() => props.onChange(board.value)} type="button">{board.label}{props.board === board.value ? <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-brand" /> : null}</button>)}
     </div>
   );
-}
-
-function ModeButton(props: { readonly active: boolean; readonly icon: ReactNode; readonly label: string; readonly onClick: () => void }) {
-  return <button aria-pressed={props.active} className={`flex min-h-11 items-center justify-center gap-1 rounded-lg text-xs font-medium sm:text-sm ${props.active ? 'bg-white text-ink shadow-sm' : 'text-slate-500'}`} onClick={props.onClick} type="button">{props.icon}{props.label}</button>;
 }
 
 function RankingFilterSheet(props: { readonly filters: RankingFilters; readonly onChange: (filters: RankingFilters) => void; readonly onClose: () => void }) {
@@ -189,22 +173,20 @@ function RankingFilterSheet(props: { readonly filters: RankingFilters; readonly 
   return (
     <div className="fixed inset-0 z-[70] flex items-end bg-slate-900/35" role="presentation" onClick={props.onClose}>
       <div aria-label="排行筛选" aria-modal="true" className="ui-surface-elevated max-h-[78dvh] w-full overflow-y-auto rounded-b-none p-4 pb-[max(1rem,env(safe-area-inset-bottom))]" role="dialog" onClick={(event) => event.stopPropagation()}>
-        <div className="flex items-center justify-between"><div><h2 className="text-base font-semibold text-ink">筛选榜单</h2><p className="mt-0.5 text-xs text-slate-500">只显示当前榜单需要的条件</p></div><button aria-label="关闭筛选" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500" onClick={props.onClose} type="button"><X size={19} /></button></div>
+        <div className="flex items-center justify-between"><h2 className="text-base font-semibold text-ink">筛选</h2><button aria-label="关闭筛选" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500" onClick={props.onClose} type="button"><X size={19} /></button></div>
         <div className="mt-3 space-y-4">
           {showCategory ? <FilterSection title={filters.board === 'top250' ? '类型' : '分类'}><div className="flex flex-wrap gap-2">{filters.board === 'top250' ? <FilterChip selected={filters.topType === 'all'} onClick={() => onChange({ ...filters, topType: 'all', topValue: '' })}>全部</FilterChip> : null}{categories.map((option) => <FilterChip selected={categoryActive(filters, option.value)} key={option.value} onClick={() => onChange(selectCategory(filters, option.value))}>{option.label}</FilterChip>)}</div></FilterSection> : null}
           {showPeriod ? <FilterSection title="周期"><div className="flex flex-wrap gap-2">{PERIODS.map((option) => <FilterChip selected={filters.period === option.value} key={option.value} onClick={() => onChange({ ...filters, period: option.value })}>{option.label}</FilterChip>)}</div></FilterSection> : null}
           {filters.board === 'playback' ? <FilterSection title="热播范围"><div className="flex flex-wrap gap-2">{PLAYBACK_FILTERS.map((option) => <FilterChip selected={filters.filterBy === option.value} key={option.value} onClick={() => onChange({ ...filters, filterBy: option.value })}>{option.label}</FilterChip>)}</div></FilterSection> : null}
           {filters.board === 'top250' ? <FilterSection title="年份"><div className="flex flex-wrap gap-2">{top250Years().map((year) => <FilterChip selected={filters.topType === 'year' && filters.topValue === String(year)} key={year} onClick={() => onChange({ ...filters, topType: 'year', topValue: String(year) })}>{year}</FilterChip>)}</div></FilterSection> : null}
         </div>
-        <button className="mt-5 min-h-11 w-full rounded-xl bg-brand px-4 text-sm font-medium text-white" onClick={props.onClose} type="button">完成</button>
+        <button className="mt-5 min-h-11 w-full rounded-lg bg-brand px-4 text-sm font-medium text-white" onClick={props.onClose} type="button">完成</button>
       </div>
     </div>
   );
 }
 
-function FilterSection(props: { readonly title: string; readonly children: ReactNode }) {
-  return <section><h3 className="mb-2 text-sm font-semibold text-ink">{props.title}</h3>{props.children}</section>;
-}
+function FilterSection(props: { readonly title: string; readonly children: ReactNode }) { return <section><h3 className="mb-2 text-sm font-semibold text-ink">{props.title}</h3>{props.children}</section>; }
 
 function filterSummary(filters: RankingFilters): string {
   if (filters.board === 'movies') return `${categoryLabel(filters.category)} · ${periodLabel(filters.period)}`;
@@ -215,54 +197,45 @@ function filterSummary(filters: RankingFilters): string {
   return categoryLabel(filters.topValue as Category);
 }
 
-function categoryLabel(value: Category): string {
-  return CATEGORIES.find((item) => item.value === value)?.label ?? '全部';
-}
-
-function periodLabel(value: Period): string {
-  return PERIODS.find((item) => item.value === value)?.label ?? '日榜';
-}
+function categoryLabel(value: Category): string { return CATEGORIES.find((item) => item.value === value)?.label ?? '全部'; }
+function periodLabel(value: Period): string { return PERIODS.find((item) => item.value === value)?.label ?? '日榜'; }
 
 function LoadingState({ board }: { readonly board: RankingBoard }) {
-  if (board === 'actors') return <div className="mt-4 grid grid-cols-2 gap-3" aria-live="polite">{Array.from({ length: 6 }, (_, index) => <div className="h-32 animate-pulse rounded-xl bg-slate-100" key={index} />)}</div>;
-  return <div className="mt-4 space-y-3" aria-live="polite">{Array.from({ length: 5 }, (_, index) => <div className="flex gap-3 rounded-xl bg-white p-3" key={index}><div className="h-28 w-20 animate-pulse rounded-lg bg-slate-100" /><div className="flex-1"><div className="h-4 w-1/3 animate-pulse rounded bg-slate-100" /><div className="mt-3 h-3 w-full animate-pulse rounded bg-slate-100" /><div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-slate-100" /></div></div>)}</div>;
+  if (board === 'actors') return <div className="mt-4 grid grid-cols-2 gap-5" aria-live="polite">{Array.from({ length: 6 }, (_, index) => <div className="h-28 animate-pulse rounded-lg bg-slate-100" key={index} />)}</div>;
+  return <div className="quiet-list mt-3" aria-live="polite">{Array.from({ length: 5 }, (_, index) => <div className="quiet-list-item flex gap-3 py-3" key={index}><div className="h-24 w-[4.25rem] animate-pulse rounded-md bg-slate-100" /><div className="flex-1"><div className="h-4 w-1/3 animate-pulse rounded bg-slate-100" /><div className="mt-3 h-3 w-full animate-pulse rounded bg-slate-100" /><div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-slate-100" /></div></div>)}</div>;
 }
 
 function MovieRankingList(props: { readonly movies: Movie[]; readonly onOpen: (id: string) => void; readonly showLoader: boolean; readonly hasMore: boolean; readonly loadingMore: boolean; readonly loaderRef: RefObject<HTMLDivElement | null> }) {
   if (props.movies.length === 0) return <div className="mt-4"><EmptyState title="暂无作品排行" /></div>;
   return (
-    <div className="mt-3 space-y-2">
-      {props.movies.map((movie, index) => <MovieRankingCard key={movie.id} movie={movie} onOpen={() => props.onOpen(movie.id)} rank={movieRank(movie, index)} />)}
-      {props.showLoader ? <div className="flex min-h-14 items-center justify-center" ref={props.loaderRef}>{props.loadingMore ? <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} />加载更多</span> : props.hasMore ? <span className="text-xs text-slate-400">继续上滑加载</span> : <span className="text-xs text-slate-400">已加载全部</span>}</div> : null}
+    <div className="quiet-list mt-3">
+      {props.movies.map((movie, index) => <MovieRankingRow key={movie.id} movie={movie} onOpen={() => props.onOpen(movie.id)} rank={movieRank(movie, index)} />)}
+      {props.showLoader ? <div className="flex min-h-14 items-center justify-center" ref={props.loaderRef}>{props.loadingMore ? <span className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} />加载中</span> : props.hasMore ? <span className="text-xs text-slate-400">继续上滑</span> : <span className="text-xs text-slate-400">已加载全部</span>}</div> : null}
     </div>
   );
 }
 
-function MovieRankingCard(props: { readonly movie: Movie; readonly rank: number; readonly onOpen: () => void }) {
+function MovieRankingRow(props: { readonly movie: Movie; readonly rank: number; readonly onOpen: () => void }) {
   return (
-    <button className="flex w-full gap-3 rounded-xl bg-white p-3 text-left shadow-sm ring-1 ring-line" onClick={props.onOpen} type="button">
-      <span className="relative shrink-0"><RankBadge rank={props.rank} /><MoviePoster alt={props.movie.number} className="h-28 w-20 rounded-lg" src={props.movie.thumb_url} /></span>
-      <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-ink">{props.movie.number}</span><span className="mt-1 line-clamp-2 text-[13px] leading-5 text-slate-600">{props.movie.title}</span><span className="mt-2 block text-xs text-slate-400">{props.movie.release_date}{props.movie.score ? ` · ⭐ ${props.movie.score}` : ''}</span><span className="mt-2 flex flex-wrap gap-1">{props.movie.has_cnsub ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">中字</span> : null}{props.movie.can_play ? <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs text-brand">可播放</span> : null}</span></span>
+    <button className="quiet-list-item flex w-full gap-3 py-3 text-left" onClick={props.onOpen} type="button">
+      <span className="w-6 shrink-0 pt-1 text-center text-sm font-semibold text-slate-400">{props.rank}</span>
+      <MoviePoster alt={props.movie.number} className="h-24 w-[4.25rem] shrink-0 rounded-md" src={props.movie.thumb_url} />
+      <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-ink">{props.movie.number}</span><span className="mt-1 line-clamp-2 text-[13px] leading-5 text-slate-600">{props.movie.title}</span><span className="mt-2 block text-xs text-slate-400">{props.movie.release_date}{props.movie.score ? ` · ⭐ ${props.movie.score}` : ''}</span><span className="mt-1 block text-xs text-slate-500">{[props.movie.has_cnsub ? '中字' : '', props.movie.can_play ? '可播放' : ''].filter(Boolean).join(' · ')}</span></span>
     </button>
   );
 }
 
-function RankBadge(props: { readonly rank: number }) {
-  const tone = props.rank === 1 ? 'bg-amber-400 text-amber-950' : props.rank === 2 ? 'bg-slate-300 text-slate-800' : props.rank === 3 ? 'bg-orange-400 text-orange-950' : 'bg-slate-900/90 text-white';
-  return <span className={`absolute -left-1 -top-1 z-10 flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-xs font-bold shadow-sm ${tone}`}>{props.rank}</span>;
-}
-
 function ActorRankingList(props: { readonly actors: RankingActor[]; readonly onOpen: (actor: ActorRef) => void }) {
   if (props.actors.length === 0) return <div className="mt-4"><EmptyState title="暂无演员排行" /></div>;
-  return <div className="mt-3 grid grid-cols-2 gap-3">{props.actors.map((actor, index) => <ActorRankingCard actor={actor} key={actor.id} onOpen={() => props.onOpen(rankingActorRef(actor))} rank={index + 1} />)}</div>;
+  return <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-6">{props.actors.map((actor, index) => <ActorRankingItem actor={actor} key={actor.id} onOpen={() => props.onOpen(rankingActorRef(actor))} rank={index + 1} />)}</div>;
 }
 
-function ActorRankingCard(props: { readonly actor: RankingActor; readonly rank: number; readonly onOpen: () => void }) {
+function ActorRankingItem(props: { readonly actor: RankingActor; readonly rank: number; readonly onOpen: () => void }) {
   const name = rankingActorName(props.actor);
   return (
-    <button className="flex min-h-16 flex-col items-center rounded-xl bg-white p-3 text-center shadow-sm ring-1 ring-line" onClick={props.onOpen} type="button">
-      <span className="relative"><RankBadge rank={props.rank} />{props.actor.avatar_url ? <img alt={name} className="h-20 w-20 rounded-full object-cover" decoding="async" loading="lazy" src={imgUrl(props.actor.avatar_url)} /> : <span className="block h-20 w-20 rounded-full bg-slate-100" />}</span>
-      <span className="mt-2 w-full truncate text-sm font-semibold text-ink">{name}</span><span className="w-full truncate text-xs text-slate-500">{props.actor.name}</span>
+    <button className="min-w-0 text-center" onClick={props.onOpen} type="button">
+      <span className="relative mx-auto block w-fit"><span className="absolute -left-1 -top-1 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-900/85 px-1 text-[11px] font-semibold text-white">{props.rank}</span>{props.actor.avatar_url ? <img alt={name} className="h-20 w-20 rounded-full object-cover" decoding="async" loading="lazy" src={imgUrl(props.actor.avatar_url)} /> : <span className="block h-20 w-20 rounded-full bg-slate-100" />}</span>
+      <span className="mt-2 block truncate text-sm font-semibold text-ink">{name}</span><span className="block truncate text-xs text-slate-500">{props.actor.name}</span>
     </button>
   );
 }

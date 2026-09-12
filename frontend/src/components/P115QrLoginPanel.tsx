@@ -92,13 +92,12 @@ export function P115QrLoginPanel({ onSuccess }: Props) {
   const succeeded = status?.status === 'succeeded';
 
   return (
-    <section className="rounded-lg border border-line bg-white p-4">
+    <section className="border-t border-line pt-4">
       <h2 className="flex items-center gap-2 text-sm font-medium text-ink"><QrCode size={16} />115 扫码登录</h2>
-      <p className="mt-1 text-xs text-slate-500">扫码成功后自动写入 Cookie，不会覆盖本页其他未保存设置。</p>
       <div className="mt-3 grid gap-3">
         <DeviceSelect devices={devices} value={device} onChange={setDevice} />
         {(!session || terminal) && !succeeded ? (
-          <button className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-brand px-3 text-sm font-medium text-white disabled:opacity-60" disabled={busy} onClick={() => void start()} type="button">
+          <button className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand px-3 text-sm font-medium text-white disabled:opacity-60" disabled={busy} onClick={() => void start()} type="button">
             {busy ? <Loader2 className="animate-spin" size={16} /> : terminal ? <RotateCcw size={16} /> : <QrCode size={16} />}
             {busy ? '生成中...' : terminal ? '重新生成二维码' : '生成二维码'}
           </button>
@@ -115,7 +114,7 @@ function DeviceSelect(props: { readonly devices: P115LoginDevice[]; readonly onC
   return (
     <label className="block">
       <span className="text-sm text-slate-600">登录设备类型</span>
-      <select className="mt-1 min-h-11 w-full rounded-md border border-line px-3" onChange={(event) => props.onChange(event.target.value)} value={props.value}>
+      <select className="mt-1 min-h-11 w-full rounded-lg border border-line bg-white px-3 text-ink" onChange={(event) => props.onChange(event.target.value)} value={props.value}>
         {props.devices.map((device) => <option key={device.value} value={device.value}>{device.label}{device.recommended ? '（推荐）' : ''}</option>)}
       </select>
     </label>
@@ -130,7 +129,7 @@ function ActiveQrSession(props: {
   readonly status: P115QrStatus | null;
 }) {
   return (
-    <div className="rounded-md border border-line p-3">
+    <div className="rounded-lg border border-line p-3">
       <img alt="115 登录二维码" className="mx-auto h-48 w-48 rounded bg-white object-contain" src={props.session.qrcode_url} />
       <p className="mt-2 text-center text-sm text-slate-600" aria-live="polite">{props.status?.message ?? '等待扫码'}</p>
       <p className="mt-1 text-center text-xs text-slate-400">过期时间：{formatExpiry(props.session.expires_at)}</p>

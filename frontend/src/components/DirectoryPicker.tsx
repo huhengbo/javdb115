@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, Folder, FolderOpen, Loader2, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Folder, FolderOpen, Loader2, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { client } from '../api';
 import type { DirectoryItem } from '../types';
@@ -35,7 +35,7 @@ const PATH_SEPARATOR = ' / ';
 const LEGACY_MANUAL_LABEL_PREFIX = '手动填写：';
 
 export function DirectoryPicker(props: Props) {
-  const { label, reloadKey, value, selectedLabel, helperText, onChange } = props;
+  const { label, reloadKey, value, selectedLabel, onChange } = props;
   const [isOpen, setIsOpen] = useState(false);
   const browser = useDirectoryBrowser(reloadKey, isOpen);
 
@@ -52,7 +52,6 @@ export function DirectoryPicker(props: Props) {
   return (
     <section>
       <DirectoryTrigger
-        helperText={helperText}
         label={label}
         selectedLabel={selectedLabel}
         value={value}
@@ -71,7 +70,6 @@ export function DirectoryPicker(props: Props) {
 }
 
 function DirectoryTrigger(props: {
-  readonly helperText?: string;
   readonly label: string;
   readonly selectedLabel: string;
   readonly value: string;
@@ -80,17 +78,19 @@ function DirectoryTrigger(props: {
   return (
     <button
       aria-haspopup="dialog"
-      className="flex min-h-24 w-full items-center gap-3 rounded-lg border border-line bg-white p-4 text-left active:bg-slate-50"
+      className="flex min-h-16 w-full items-center gap-3 border-b border-line py-3 text-left"
       onClick={props.onOpen}
       type="button"
     >
-      <FolderOpen className="shrink-0 text-brand" size={22} />
+      <FolderOpen className="shrink-0 text-brand" size={19} />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium text-ink">{props.label}</span>
-        {props.helperText ? <span className="mt-1 block text-xs text-slate-500">{props.helperText}</span> : null}
-        <span className="mt-2 block break-words text-sm text-slate-700">{selectedDisplay(props.value, props.selectedLabel)}</span>
+        <span className="mt-0.5 block truncate text-xs text-slate-500">{selectedDisplay(props.value, props.selectedLabel)}</span>
       </span>
-      <span className="shrink-0 rounded-md bg-slate-100 px-3 py-2 text-xs font-medium text-ink">{props.value ? '更换' : '选择'}</span>
+      <span className="flex shrink-0 items-center gap-1 text-xs text-slate-500">
+        {props.value ? '更换' : '选择'}
+        <ChevronRight size={16} />
+      </span>
     </button>
   );
 }
@@ -136,7 +136,7 @@ function DirectoryModal(props: {
           {props.browser.error ? (
             <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger" role="alert">
               <p>{props.browser.error}</p>
-              <button className="mt-2 min-h-10 rounded-md border border-red-200 bg-white px-3 text-sm" onClick={props.browser.refresh} type="button">重试</button>
+              <button className="mt-2 min-h-11 rounded-md border border-red-200 bg-white px-3 text-sm" onClick={props.browser.refresh} type="button">重试</button>
             </div>
           ) : null}
           <DirectoryList browser={props.browser} />
@@ -179,17 +179,17 @@ function DirectoryModalHeader(props: {
 
 function DirectoryList({ browser }: { readonly browser: DirectoryBrowser }) {
   if (browser.isLoading) {
-    return <p className="mt-3 flex min-h-20 items-center justify-center gap-2 rounded-md border border-line text-sm text-slate-500"><Loader2 className="animate-spin" size={18} />目录加载中...</p>;
+    return <p className="mt-3 flex min-h-20 items-center justify-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} />目录加载中...</p>;
   }
   if (browser.error) return null;
   if (browser.items.length === 0) {
-    return <p className="mt-3 rounded-md border border-line p-4 text-sm text-slate-500">当前目录没有子目录，可直接选择当前目录。</p>;
+    return <p className="mt-3 p-4 text-sm text-slate-500">当前目录没有子目录，可直接选择当前目录。</p>;
   }
   return (
-    <div className="mt-3 space-y-2">
+    <div className="quiet-list mt-3">
       {browser.items.map((item) => (
         <button
-          className="flex min-h-14 w-full items-center gap-3 rounded-md border border-line px-3 py-2 text-left active:bg-slate-50 disabled:opacity-50"
+          className="quiet-list-item flex min-h-14 w-full items-center gap-3 py-2 text-left disabled:opacity-50"
           disabled={browser.isLoading}
           key={item.id}
           onClick={() => browser.openDirectory(item)}
@@ -200,7 +200,7 @@ function DirectoryList({ browser }: { readonly browser: DirectoryBrowser }) {
             <span className="block truncate text-sm font-medium text-ink">{item.name}</span>
             {item.path ? <span className="block truncate text-xs text-slate-500">{item.path}</span> : null}
           </span>
-          <FolderOpen className="shrink-0 text-brand" size={18} />
+          <ChevronRight className="shrink-0 text-slate-400" size={17} />
         </button>
       ))}
     </div>
@@ -259,7 +259,7 @@ function loadDirectories(parentId: string, state: DirectoryLoadState) {
 
 function selectedDisplay(value: string, selectedLabel: string): string {
   if (!value) return '未选择目录';
-  return resolvedLabel(selectedLabel) || '已选择目录，重新选择后会补全名称';
+  return resolvedLabel(selectedLabel) || '已选择目录';
 }
 
 function currentSelection(browser: DirectoryBrowser): DirectorySelection {
