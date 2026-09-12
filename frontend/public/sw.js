@@ -1,3 +1,5 @@
+/* global self, caches, URL, __PWA_ASSET_LIST__ */
+
 const BUILD_ID = '__PWA_BUILD_ID__';
 const CACHE_NAME = `javdb115-shell-${BUILD_ID}`;
 const PRECACHE_URLS = __PWA_ASSET_LIST__;
@@ -36,9 +38,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request).catch(() => caches.match('/index.html'))
-    );
+    event.respondWith(fetch(request).catch(() => caches.match('/index.html')));
     return;
   }
 
