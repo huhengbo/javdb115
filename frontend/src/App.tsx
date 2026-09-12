@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { currentUser, logout as logoutRequest } from './api';
 import { AppShell } from './components/AppShell';
 import { DashboardPage } from './pages/DashboardPage';
@@ -110,7 +110,7 @@ export default function App() {
   );
 }
 
-function TabPanel(props: { readonly active: boolean; readonly mounted: boolean; readonly children: React.ReactNode }) {
+function TabPanel(props: { readonly active: boolean; readonly mounted: boolean; readonly children: ReactNode }) {
   if (!props.mounted) return null;
   return <div aria-hidden={!props.active} hidden={!props.active} inert={!props.active}>{props.children}</div>;
 }
