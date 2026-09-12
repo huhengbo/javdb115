@@ -7,6 +7,7 @@ from pathlib import Path
 DEFAULT_DATABASE_PATH = "data/app.sqlite3"
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_SESSION_TTL_HOURS = 24
+DEFAULT_SESSION_COOKIE_NAME = "javdb115_session"
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,8 @@ class AppConfig:
     admin_password: str
     secret_key: str
     session_ttl_hours: int
+    session_cookie_name: str
+    session_cookie_secure: bool
 
 
 def require_env(name: str) -> str:
@@ -23,6 +26,13 @@ def require_env(name: str) -> str:
     if value:
         return value
     raise RuntimeError(f"Missing required environment variable: {name}")
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def load_config() -> AppConfig:
@@ -34,4 +44,6 @@ def load_config() -> AppConfig:
         admin_password=require_env("APP_ADMIN_PASSWORD"),
         secret_key=require_env("APP_SECRET_KEY"),
         session_ttl_hours=ttl,
+        session_cookie_name=os.getenv("APP_SESSION_COOKIE_NAME", DEFAULT_SESSION_COOKIE_NAME),
+        session_cookie_secure=env_bool("APP_SESSION_COOKIE_SECURE"),
     )
