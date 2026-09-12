@@ -1,7 +1,7 @@
 import { AlertTriangle, Check, ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { client } from '../api';
-import { ConfirmDialog } from './discovery/ConfirmDialog';
+import { movieIdFromSourceUrl } from '../lib/javdb';
 import {
   formatDateTime,
   formatRelativeTime,
@@ -13,17 +13,19 @@ import {
   taskStageLabel
 } from '../lib/tasks';
 import type { Task } from '../types';
+import { ConfirmDialog } from './discovery/ConfirmDialog';
 import { MoviePoster } from './MoviePoster';
 import { StatusPill } from './StatusPill';
 
 type Props = {
   tasks: Task[];
   onChanged?: () => void;
+  onOpenMovie?: (movieId: string) => void;
 };
 
 const TIMELINE_STEPS = ['提交', '下载', '整理', '完成'] as const;
 
-export function TaskList({ tasks, onChanged }: Props) {
+export function TaskList({ tasks, onChanged, onOpenMovie }: Props) {
   const deletion = useTaskDeletion(onChanged);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
@@ -47,7 +49,7 @@ export function TaskList({ tasks, onChanged }: Props) {
           const expanded = expandedIds.has(task.id);
           return (
             <article key={task.id} className="rounded-lg border border-line bg-white p-4">
-              <TaskHeader task={task} />
+              <TaskHeader task={task} onOpenMovie={onOpenMovie} />
               <TaskTimeline task={task} />
               <TaskIssueBlock task={task} compact={!expanded} />
               {task.status === 'failed' ? <RetryButton taskId={task.id} onChanged={onChanged} /> : null}
@@ -117,13 +119,30 @@ function useTaskDeletion(onChanged?: () => void) {
   return { busy, close, confirm, error, open, task };
 }
 
-function TaskHeader({ task }: { readonly task: Task }) {
+function TaskHeader({ task, onOpenMovie }: { readonly task: Task; readonly onOpenMovie?: (movieId: string) => void }) {
+  const movieId = movieIdFromSourceUrl(task.work?.source_url);
+  const canOpenMovie = Boolean(movieId && onOpenMovie);
+  const openMovie = () => {
+    if (movieId && onOpenMovie) onOpenMovie(movieId);
+  };
+  const poster = <MoviePoster alt={task.work?.code ?? `任务 #${task.id}`} className="h-20 w-14 shrink-0 rounded" src={task.work?.cover_url} />;
+
   return (
     <div className="flex items-start gap-3">
-      <MoviePoster alt={task.work?.code ?? `任务 #${task.id}`} className="h-20 w-14 shrink-0 rounded" src={task.work?.cover_url} />
+      {canOpenMovie ? (
+        <button aria-label={`查看作品 ${task.work?.code ?? task.id}`} className="shrink-0 rounded active:scale-[0.98]" onClick={openMovie} type="button">
+          {poster}
+        </button>
+      ) : poster}
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="min-w-0 truncate text-base font-semibold text-ink">{task.work?.code ?? `任务 #${task.id}`}</h3>
+          {canOpenMovie ? (
+            <button className="min-w-0 truncate text-left text-base font-semibold text-ink underline-offset-2 hover:text-brand hover:underline active:text-brand" onClick={openMovie} type="button">
+              {task.work?.code ?? `任务 #${task.id}`}
+            </button>
+          ) : (
+            <h3 className="min-w-0 truncate text-base font-semibold text-ink">{task.work?.code ?? `任务 #${task.id}`}</h3>
+          )}
           <StatusPill value={task.status} />
         </div>
         <p className="mt-1 line-clamp-2 text-sm text-slate-600">{task.work?.title ?? taskStageLabel(task.stage)}</p>
