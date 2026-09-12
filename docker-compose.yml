@@ -1,5 +1,6 @@
 services:
   javdb115:
+    image: "${JAVDB115_IMAGE:-javdb115:local}"
     build:
       context: .
       args:
