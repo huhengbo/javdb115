@@ -43,12 +43,18 @@ def decrypt_secret(value: str, secret_key: str) -> str:
         nonce = raw[:_NONCE_BYTES]
         tag = raw[_NONCE_BYTES : _NONCE_BYTES + _TAG_BYTES]
         ciphertext = raw[_NONCE_BYTES + _TAG_BYTES :]
-        cipher: Any = AES.new(_derive_key(secret_key), AES.MODE_GCM, nonce=nonce, mac_len=_TAG_BYTES)
+        cipher: Any = AES.new(
+            _derive_key(secret_key),
+            AES.MODE_GCM,
+            nonce=nonce,
+            mac_len=_TAG_BYTES,
+        )
         plaintext = cipher.decrypt_and_verify(ciphertext, tag)
         return plaintext.decode("utf-8")
     except (ValueError, UnicodeDecodeError) as exc:
         raise SecretDecryptionError(
-            "Unable to decrypt a secret setting. APP_SECRET_KEY may have changed or the database value is corrupted."
+            "Unable to decrypt a secret setting. APP_SECRET_KEY may have changed "
+            "or the database value is corrupted."
         ) from exc
 
 
