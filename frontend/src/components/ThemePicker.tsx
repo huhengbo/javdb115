@@ -36,6 +36,7 @@ export function ThemePicker() {
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
         {OPTIONS.map((option) => (
           <button
+            aria-label={option.label}
             aria-pressed={value === option.value}
             className={`min-h-16 rounded-lg border p-3 text-left ${value === option.value ? 'border-brand bg-teal-50 ring-1 ring-brand' : 'border-line bg-white'}`}
             key={option.value}
