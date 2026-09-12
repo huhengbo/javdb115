@@ -4,6 +4,55 @@ All notable changes to this project are documented here. The project follows Sem
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-12
+
+> 本版本聚焦移动端体验与核心列表交互，在不改变现有 React + Tailwind 架构的前提下完成界面现代化，并补齐任务分页、统一详情跳转和预览图拖拽体验。
+
+### ✨ 主要更新
+
+- 完成移动端 UI/UX 现代化：统一 App Shell、页面标题、卡片层级、状态反馈、筛选控件与主题样式，降低移动端视觉噪声。
+- 首页重构为运行状态 Dashboard，突出整体健康状态、关键任务数量、异常集成和最近任务，并提供完整任务入口。
+- 发现页优化搜索、筛选、双列海报卡片、骨架屏、空状态和自动触底加载，提升 320–430px 手机宽度下的可读性。
+- 排行页收敛首屏筛选层级；关注页将低频操作收入二级菜单；设置页改为分组折叠并保留移动端固定保存栏。
+- 任务页采用主状态筛选 + 更多筛选，任务卡片改为渐进展开，正常任务降低时间线噪声，失败任务突出恢复动作。
+
+### 📱 交互改进
+
+- 统一作品详情导航：任务封面、番号等可识别作品入口可直接打开站内详情，并保持浏览器返回层级与全局底部导航可用。
+- 预览大图升级为跟手拖拽：支持相邻图片预渲染、边缘阻尼、速度判定、回弹和左右切换，同时保留桌面按钮与键盘操作。
+- 底部主导航层级调整，确保详情 Sheet / Overlay 与全局导航之间不会互相遮挡。
+- 登录页增加密码显隐、提交中状态、错误提示、自动填充和移动端键盘语义。
+
+### 🛠️ 任务与可靠性
+
+- 任务列表改为服务端分页与服务端筛选，补充真实状态 counts，并兼容自动刷新后保留已加载历史。
+- 补充任务分页、作品详情导航、Lightbox 拖拽以及移动端设置/主题/窄屏布局等浏览器回归测试。
+- 完整 CI 覆盖 Python 3.12 / 3.13、Frontend lint/test/build、Mobile browser interactions、Web E2E smoke 和 Docker 双架构安全构建。
+
+### 🐳 Docker / GHCR
+
+- 镜像：`ghcr.io/huhengbo/javdb115`
+- 架构：`linux/amd64`、`linux/arm64`
+- 正式版本发布：`0.1.1`、`0.1`、`latest`、`sha-*`。
+- `master` 继续发布 `edge` 和 `sha-*`，不覆盖正式版 `latest`。
+- 镜像继续附带 SBOM 与 provenance，并在发布前执行 Trivy HIGH/CRITICAL 扫描和 non-root smoke test。
+
+### 📦 升级说明
+
+- **从 `0.1.0` / `latest` 升级**：直接拉取 `ghcr.io/huhengbo/javdb115:0.1.1` 或新的 `:latest` 并重建容器即可。
+- **无业务数据迁移要求**：本版本主要为前端交互和任务查询能力升级，不要求手工修改现有 SQLite 数据。
+- **必须保持 `APP_SECRET_KEY` 不变**：已有加密的 115 Cookie / Telegram Token 依赖该密钥解密。
+- **Docker Compose**：执行 `docker compose pull` 后重新创建容器即可；不要删除持久化数据库目录/卷。
+- **PWA 用户**：服务端升级后，已安装应用会通过现有更新机制加载新版前端，无需卸载重装。
+- 升级前仍建议保留数据库备份。
+
+### ✅ 兼容性
+
+- Docker：Linux `amd64` / `arm64`。
+- 后端 CI：Python 3.12、3.13。
+- 前端：现代 Chromium/Safari；继续以 Android Chrome/Chromium 和 iOS Safari/PWA 为主要移动端目标。
+- 主要移动验收宽度：320px、390px、430px；桌面端保持正常可用。
+
 ## [0.1.0] - 2026-09-12
 
 > JavDB 115 首个正式公开版本。以移动端使用为主，提供 JavDB 作品发现、115 离线下载与整理、关注订阅、任务跟踪和 Telegram 通知，并可作为 PWA 安装到手机主屏幕。
