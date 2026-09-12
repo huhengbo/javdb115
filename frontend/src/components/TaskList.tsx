@@ -1,7 +1,7 @@
 import { AlertTriangle, Check, ChevronDown, Loader2, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { client } from '../api';
-import { ConfirmDialog } from './discovery/ConfirmDialog';
+import { movieIdFromSourceUrl } from '../lib/javdb';
 import {
   formatDateTime,
   formatRelativeTime,
@@ -13,6 +13,8 @@ import {
   taskStageLabel
 } from '../lib/tasks';
 import type { Task } from '../types';
+import { ConfirmDialog } from './discovery/ConfirmDialog';
+import { useMovieNavigation } from './discovery/MovieDetailNavigator';
 import { MoviePoster } from './MoviePoster';
 import { StatusPill } from './StatusPill';
 import { EmptyState } from './ui';
@@ -27,6 +29,7 @@ const TIMELINE_STEPS = ['提交', '下载', '整理', '完成'] as const;
 
 export function TaskList({ tasks, onChanged, compact = false }: Props) {
   const deletion = useTaskDeletion(onChanged);
+  const navigation = useMovieNavigation();
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
   if (tasks.length === 0) {
@@ -50,29 +53,15 @@ export function TaskList({ tasks, onChanged, compact = false }: Props) {
           const expanded = expandedIds.has(task.id);
           const failed = taskIssueKind(task) !== 'none' || task.status === 'failed';
           return (
-            <article key={task.id} className={`overflow-hidden rounded-xl bg-white shadow-sm ring-1 ${failed ? 'ring-red-100' : 'ring-line/60'}`}>
-              <button
-                aria-expanded={compact ? undefined : expanded}
-                className={`w-full text-left ${compact ? 'p-3' : 'p-4'} ${compact ? 'cursor-default' : 'cursor-pointer'}`}
-                onClick={() => toggleExpanded(task.id)}
-                type="button"
-              >
-                <div className="flex items-start gap-3">
-                  <MoviePoster alt={task.work?.code ?? `任务 #${task.id}`} className={`${compact ? 'h-16 w-11' : 'h-20 w-14'} shrink-0 rounded-lg`} src={task.work?.cover_url} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="min-w-0 truncate text-sm font-semibold text-ink sm:text-base">{task.work?.code ?? `任务 #${task.id}`}</h3>
-                      <StatusPill value={task.status} />
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-slate-500">{task.work?.title ?? taskStageLabel(task.stage)}</p>
-                    <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-slate-400">
-                      <span className="truncate">{taskStageLabel(task.stage)} · {formatRelativeTime(task.updated_at)}</span>
-                      {!compact ? <ChevronDown className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} size={16} /> : null}
-                    </div>
-                  </div>
-                </div>
+            <article
+              key={task.id}
+              className={`overflow-hidden rounded-xl bg-white shadow-sm ring-1 ${failed ? 'ring-red-100' : 'ring-line/60'} ${compact ? '' : 'cursor-pointer'}`}
+              onClick={() => toggleExpanded(task.id)}
+            >
+              <div className={compact ? 'p-3' : 'p-4'}>
+                <TaskHeader compact={compact} expanded={expanded} task={task} onOpenMovie={navigation.openMovie} />
                 {!compact && (task.status !== 'completed' || expanded) ? <TaskTimeline task={task} /> : null}
-              </button>
+              </div>
               {failed ? <div className={`px-4 ${expanded ? 'pb-0' : 'pb-3'}`}><TaskIssueBlock task={task} compact={!expanded} /></div> : null}
               {!compact && task.status === 'failed' && !expanded ? <div className="px-4 pb-3"><RetryButton taskId={task.id} onChanged={onChanged} /></div> : null}
               {!compact && expanded ? (
@@ -123,6 +112,43 @@ function useTaskDeletion(onChanged?: () => void) {
   }
 
   return { busy, close, confirm, error, open, task };
+}
+
+function TaskHeader(props: {
+  readonly compact: boolean;
+  readonly expanded: boolean;
+  readonly task: Task;
+  readonly onOpenMovie: (movieId: string) => void;
+}) {
+  const movieId = movieIdFromSourceUrl(props.task.work?.source_url);
+  const code = props.task.work?.code ?? `任务 #${props.task.id}`;
+  const poster = <MoviePoster alt={code} className={`${props.compact ? 'h-16 w-11' : 'h-20 w-14'} shrink-0 rounded-lg`} src={props.task.work?.cover_url} />;
+
+  function openMovie(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    if (movieId) props.onOpenMovie(movieId);
+  }
+
+  return (
+    <div className="flex items-start gap-3">
+      {movieId ? <button aria-label={`查看作品 ${code}`} className="shrink-0 rounded-lg active:scale-[0.98]" onClick={openMovie} type="button">{poster}</button> : poster}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          {movieId ? (
+            <button className="min-w-0 truncate text-left text-sm font-semibold text-ink underline-offset-2 hover:text-brand hover:underline active:text-brand sm:text-base" onClick={openMovie} type="button">{code}</button>
+          ) : (
+            <h3 className="min-w-0 truncate text-sm font-semibold text-ink sm:text-base">{code}</h3>
+          )}
+          <StatusPill value={props.task.status} />
+        </div>
+        <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-slate-500">{props.task.work?.title ?? taskStageLabel(props.task.stage)}</p>
+        <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-slate-400">
+          <span className="truncate">{taskStageLabel(props.task.stage)} · {formatRelativeTime(props.task.updated_at)}</span>
+          {!props.compact ? <ChevronDown className={`shrink-0 transition-transform ${props.expanded ? 'rotate-180' : ''}`} size={16} /> : null}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TaskTimeline({ task }: { readonly task: Task }) {
@@ -178,7 +204,7 @@ function directoryLabel(task: Task): string {
 }
 
 function DeleteButton({ task, onClick }: { readonly task: Task; readonly onClick: () => void }) {
-  return <button aria-label={`删除任务 ${task.work?.code ?? task.id}`} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-red-50 px-3 text-sm font-medium text-danger" onClick={onClick} type="button"><Trash2 size={16} />删除记录</button>;
+  return <button aria-label={`删除任务 ${task.work?.code ?? task.id}`} className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-red-50 px-3 text-sm font-medium text-danger" onClick={(event) => { event.stopPropagation(); onClick(); }} type="button"><Trash2 size={16} />删除记录</button>;
 }
 
 function DeleteDescription({ error, task }: { readonly error: string | null; readonly task: Task }) {
@@ -205,7 +231,7 @@ function RetryButton({ taskId, onChanged }: { readonly taskId: number; readonly 
 
   return (
     <div className="mt-3">
-      <button className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-50 px-3 text-sm font-medium text-ink disabled:opacity-60" disabled={isRetrying} onClick={() => void retry()} type="button">{isRetrying ? <Loader2 className="animate-spin" size={16} /> : null}{isRetrying ? '重试中' : '手动重试'}</button>
+      <button className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-50 px-3 text-sm font-medium text-ink disabled:opacity-60" disabled={isRetrying} onClick={(event) => { event.stopPropagation(); void retry(); }} type="button">{isRetrying ? <Loader2 className="animate-spin" size={16} /> : null}{isRetrying ? '重试中' : '手动重试'}</button>
       {error ? <p className="mt-2 rounded-md bg-red-50 p-3 text-sm text-danger" role="alert">{error}</p> : null}
     </div>
   );

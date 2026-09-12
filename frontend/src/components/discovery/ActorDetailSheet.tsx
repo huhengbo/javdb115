@@ -112,7 +112,7 @@ export function ActorDetailSheet(props: Props) {
             <span className="truncate px-2 text-sm font-medium text-ink">演员详情 · {currentActor.name}</span>
             <span className="w-12" />
           </header>
-          <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="p-4 pb-[calc(5rem+env(safe-area-inset-bottom))]">
             <ActorHeader actor={currentActor} detail={detail} follow={props.follow} onFollow={() => setShowFollowDialog(true)} />
             <ControlTitle title="筛选标签" caption="标签会直接参与演员作品搜索" />
             <FilterBar activeTagIds={activeTagIds} onChange={setActiveTagIds} />

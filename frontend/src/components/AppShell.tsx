@@ -56,7 +56,7 @@ export function AppShell({ active, onChange, onLogout, onOpenSettings, children 
         {children}
       </main>
       {!keyboardVisible ? (
-        <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-50 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
+        <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-[80] border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
           <div className="mx-auto grid h-16 max-w-3xl grid-cols-5 gap-1 px-2 py-1.5">
             {tabs.map((tab) => {
               const Icon = tab.icon;

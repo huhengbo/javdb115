@@ -147,7 +147,7 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
         </div>
       </div>
       {message && isTop ? (
-        <div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[75] mx-auto max-w-md rounded-lg bg-emerald-700 px-4 py-3 text-sm text-white shadow-lg" role="status">
+        <div className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[82] mx-auto max-w-md rounded-lg bg-emerald-700 px-4 py-3 text-sm text-white shadow-lg" role="status">
           <div className="flex items-center justify-between gap-3"><span>{message}</span><button className="min-h-9 px-2 text-xs" onClick={() => setMessage(null)} type="button">关闭</button></div>
         </div>
       ) : null}
@@ -209,7 +209,7 @@ type ContentProps = {
 
 function Content(props: ContentProps) {
   return (
-    <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div className="p-4 pb-[calc(5rem+env(safe-area-inset-bottom))]">
       <MovieSummary detail={props.detail} onOpenActor={props.onOpenActor} />
       <MagnetList magnets={props.magnets} onSelect={props.onSelectMagnet} />
       <MovieTaskHistory error={props.taskHistoryError} items={props.taskHistory} loading={props.taskHistoryLoading} />
