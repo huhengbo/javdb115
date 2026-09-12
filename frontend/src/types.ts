@@ -175,6 +175,7 @@ export type Movie = {
   has_preview_images: boolean;
   magnets_count: number;
   preview_images?: PreviewImage[];
+  ranking?: number;
 };
 
 export type MovieDetail = {

@@ -1,61 +1,182 @@
-import { ChevronLeft, ChevronRight, Film, Loader2, Users } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent } from 'react';
+import { Film, Loader2, Play, Trophy, Users } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { client } from '../api';
 import { ActorDetailSheet } from '../components/discovery/ActorDetailSheet';
 import { MovieDetailSheet } from '../components/discovery/MovieDetailSheet';
 import { MoviePoster } from '../components/MoviePoster';
 import { actorLabel, imgUrl, type ActorRef } from '../lib/javdb';
 import { useDetailHistory } from '../lib/useDetailHistory';
-import type { Follow, Movie, PreviewImage, RankingActor } from '../types';
+import type { Follow, Movie, RankingActor } from '../types';
 
-const MOVIE_PERIODS = [
+const TOP250_PAGE_SIZE = 50;
+const TOP250_MAX_PAGES = 5;
+const TOP250_START_YEAR = 2008;
+
+const BOARDS = [
+  { value: 'movies', label: '作品', icon: Film },
+  { value: 'playback', label: '热播', icon: Play },
+  { value: 'actors', label: '演员', icon: Users },
+  { value: 'top250', label: 'TOP250', icon: Trophy }
+] as const;
+
+const CATEGORIES = [
+  { value: '0', label: '有码' },
+  { value: '1', label: '无码' },
+  { value: '2', label: '欧美' },
+  { value: '3', label: 'FC2' }
+] as const;
+
+const PERIODS = [
   { value: 'daily', label: '日榜' },
   { value: 'weekly', label: '周榜' },
   { value: 'monthly', label: '月榜' }
 ] as const;
 
-type RankingMode = 'movies' | 'actors';
+const PLAYBACK_FILTERS = [
+  { value: 'high_score', label: '高分' },
+  { value: 'all', label: '全部' }
+] as const;
+
+type RankingBoard = (typeof BOARDS)[number]['value'];
+type Category = (typeof CATEGORIES)[number]['value'];
+type Period = (typeof PERIODS)[number]['value'];
+type PlaybackFilter = (typeof PLAYBACK_FILTERS)[number]['value'];
+type TopType = 'all' | 'video_type' | 'year';
+
+type RankingFilters = {
+  board: RankingBoard;
+  category: Category;
+  period: Period;
+  filterBy: PlaybackFilter;
+  topType: TopType;
+  topValue: string;
+};
+
+const DEFAULT_FILTERS: RankingFilters = {
+  board: 'movies',
+  category: '0',
+  period: 'daily',
+  filterBy: 'high_score',
+  topType: 'all',
+  topValue: ''
+};
 
 export function RankingsPage() {
-  const [mode, setMode] = useState<RankingMode>('movies');
-  const [moviePeriod, setMoviePeriod] = useState('daily');
+  const [filters, setFilters] = useState<RankingFilters>(() => parseFilters(window.location.search));
   const [movies, setMovies] = useState<Movie[]>([]);
   const [actors, setActors] = useState<RankingActor[]>([]);
   const [follows, setFollows] = useState<Follow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [topPage, setTopPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const loaderRef = useRef<HTMLDivElement>(null);
   const followByActorId = useMemo(() => Object.fromEntries(follows.map((follow) => [follow.actor_external_id, follow])), [follows]);
   const { selectedMovie, selectedActor, activeOverlayKind, openMovie, closeMovie, openActor, closeActor } =
     useDetailHistory('rankings');
+
   const loadRankings = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setHasMore(false);
+    setTopPage(1);
+    window.scrollTo({ top: 0 });
     try {
-      if (mode === 'movies') {
-        setMovies([]);
-        window.scrollTo({ top: 0 });
-        setMovies(await client.rankingsPlayback(moviePeriod));
-      } else {
+      if (filters.board === 'movies') {
         setActors([]);
-        window.scrollTo({ top: 0 });
-        setActors(await client.rankingsActors());
+        setMovies(await client.rankings(filters.category, filters.period));
+        return;
       }
+      if (filters.board === 'playback') {
+        setActors([]);
+        setMovies(await client.rankingsPlayback(filters.period, filters.filterBy));
+        return;
+      }
+      if (filters.board === 'actors') {
+        setMovies([]);
+        setActors(await client.rankingsActors(filters.category));
+        return;
+      }
+      setActors([]);
+      const result = await client.moviesTop(1, TOP250_PAGE_SIZE, filters.topType, filters.topValue);
+      setMovies(result);
+      setHasMore(result.length === TOP250_PAGE_SIZE);
     } catch (err) {
+      setMovies([]);
+      setActors([]);
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [mode, moviePeriod]);
+  }, [filters]);
+
+  const loadMoreTop = useCallback(async () => {
+    if (filters.board !== 'top250' || loading || loadingMore || !hasMore) {
+      return;
+    }
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const nextPage = topPage + 1;
+      const result = await client.moviesTop(nextPage, TOP250_PAGE_SIZE, filters.topType, filters.topValue);
+      setMovies((current) => [...current, ...result]);
+      setTopPage(nextPage);
+      setHasMore(result.length === TOP250_PAGE_SIZE && nextPage < TOP250_MAX_PAGES);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [filters, hasMore, loading, loadingMore, topPage]);
+
+  useEffect(() => {
+    writeFilters(filters);
+  }, [filters]);
   useEffect(() => void loadRankings(), [loadRankings]);
   useEffect(() => void loadFollows(setFollows), []);
+  useEffect(() => {
+    const element = loaderRef.current;
+    if (!element || filters.board !== 'top250') {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          void loadMoreTop();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [filters.board, loadMoreTop]);
+
   return (
     <section>
-      <RankingsHeader mode={mode} onModeChange={setMode} />
-      <RankingsFilters mode={mode} moviePeriod={moviePeriod} onMoviePeriodChange={setMoviePeriod} />
-      {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger">{error}</p> : null}
+      <h1 className="text-2xl font-semibold text-ink">排行</h1>
+      <BoardTabs board={filters.board} onChange={(board) => setFilters((current) => normalizeFilters({ ...current, board }))} />
+      <RankingsFilters filters={filters} onChange={(next) => setFilters(normalizeFilters(next))} />
+      {error ? (
+        <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger">
+          <p>{error}</p>
+          <button className="mt-2 min-h-10 rounded-md bg-white px-3 text-xs font-medium text-ink ring-1 ring-line" onClick={() => void loadRankings()} type="button">
+            重试
+          </button>
+        </div>
+      ) : null}
       {loading ? <LoadingState /> : null}
-      {!loading && mode === 'movies' ? <MovieRankingList movies={movies} onOpen={openMovie} /> : null}
-      {!loading && mode === 'actors' ? <ActorRankingList actors={actors} onOpen={openActor} /> : null}
+      {!loading && !error && (filters.board === 'movies' || filters.board === 'playback' || filters.board === 'top250') ? (
+        <MovieRankingList
+          hasMore={filters.board === 'top250' && hasMore}
+          loadingMore={loadingMore}
+          loaderRef={loaderRef}
+          movies={movies}
+          onOpen={openMovie}
+          showLoader={filters.board === 'top250'}
+        />
+      ) : null}
+      {!loading && !error && filters.board === 'actors' ? <ActorRankingList actors={actors} onOpen={openActor} /> : null}
       {selectedMovie ? (
         <MovieDetailSheet
           isTop={activeOverlayKind === 'movie'}
@@ -65,48 +186,117 @@ export function RankingsPage() {
           onOpenMovie={(movieId) => openMovie(movieId, selectedMovie.parentActor)}
         />
       ) : null}
-      {selectedActor ? <ActorDetailSheet actor={selectedActor.actor} follow={followByActorId[selectedActor.actor.id] ?? null} isTop={activeOverlayKind === 'actor'} onClose={closeActor} onOpenMovie={openMovie} onSaveFollow={(actor, tagIds, tagNames) => saveFollow(actor, tagIds, tagNames, setFollows)} /> : null}
+      {selectedActor ? (
+        <ActorDetailSheet
+          actor={selectedActor.actor}
+          follow={followByActorId[selectedActor.actor.id] ?? null}
+          isTop={activeOverlayKind === 'actor'}
+          onClose={closeActor}
+          onOpenMovie={openMovie}
+          onSaveFollow={(actor, tagIds, tagNames) => saveFollow(actor, tagIds, tagNames, setFollows)}
+        />
+      ) : null}
     </section>
   );
 }
 
-function RankingsHeader(props: { readonly mode: RankingMode; readonly onModeChange: (mode: RankingMode) => void }) {
+function BoardTabs(props: { readonly board: RankingBoard; readonly onChange: (board: RankingBoard) => void }) {
   return (
-    <>
-      <h1 className="text-2xl font-semibold text-ink">排行</h1>
-      <div className="mt-3 grid grid-cols-2 rounded-lg bg-slate-100 p-1">
-        <ModeButton active={props.mode === 'movies'} icon={<Film size={16} />} label="作品榜" onClick={() => props.onModeChange('movies')} />
-        <ModeButton active={props.mode === 'actors'} icon={<Users size={16} />} label="演员榜" onClick={() => props.onModeChange('actors')} />
-      </div>
-    </>
+    <div className="mt-3 grid grid-cols-4 rounded-lg bg-slate-100 p-1">
+      {BOARDS.map((board) => {
+        const Icon = board.icon;
+        return (
+          <ModeButton
+            active={props.board === board.value}
+            icon={<Icon size={16} />}
+            key={board.value}
+            label={board.label}
+            onClick={() => props.onChange(board.value)}
+          />
+        );
+      })}
+    </div>
   );
 }
 
 function ModeButton(props: { readonly active: boolean; readonly icon: ReactNode; readonly label: string; readonly onClick: () => void }) {
   return (
-    <button className={`flex min-h-11 items-center justify-center gap-2 rounded-md text-sm font-medium ${props.active ? 'bg-white text-ink shadow-sm' : 'text-slate-500'}`} onClick={props.onClick} type="button">
+    <button className={`flex min-h-11 items-center justify-center gap-1 rounded-md text-xs font-medium sm:text-sm ${props.active ? 'bg-white text-ink shadow-sm' : 'text-slate-500'}`} onClick={props.onClick} type="button">
       {props.icon}
       {props.label}
     </button>
   );
 }
 
-function RankingsFilters(props: {
-  readonly mode: RankingMode;
-  readonly moviePeriod: string;
-  readonly onMoviePeriodChange: (value: string) => void;
-}) {
-  if (props.mode === 'actors') {
-    return <p className="mt-3 text-xs text-slate-500">演员月榜</p>;
-  }
+function RankingsFilters(props: { readonly filters: RankingFilters; readonly onChange: (filters: RankingFilters) => void }) {
+  const { filters, onChange } = props;
+  const showCategory = filters.board === 'movies' || filters.board === 'actors' || filters.board === 'top250';
+  const showPeriod = filters.board === 'movies' || filters.board === 'playback';
+  const categories = filters.board === 'actors' ? CATEGORIES.filter((item) => item.value !== '3') : CATEGORIES;
   return (
-    <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-      {MOVIE_PERIODS.map((option) => (
-        <button className={`min-h-10 shrink-0 rounded-full px-3 text-xs font-medium ${props.moviePeriod === option.value ? 'bg-brand text-white' : 'bg-white text-slate-600 ring-1 ring-line'}`} key={option.value} onClick={() => props.onMoviePeriodChange(option.value)} type="button">
-          {option.label}
-        </button>
-      ))}
+    <div className="mt-3 space-y-2">
+      {showCategory ? (
+        <ChipRow>
+          {filters.board === 'top250' ? (
+            <Chip
+              active={filters.topType === 'all'}
+              label="全部"
+              onClick={() => onChange({ ...filters, topType: 'all', topValue: '' })}
+            />
+          ) : null}
+          {categories.map((option) => (
+            <Chip
+              active={categoryActive(filters, option.value)}
+              key={option.value}
+              label={option.label}
+              onClick={() => onChange(selectCategory(filters, option.value))}
+            />
+          ))}
+        </ChipRow>
+      ) : null}
+      {showPeriod ? (
+        <ChipRow>
+          {PERIODS.map((option) => (
+            <Chip active={filters.period === option.value} key={option.value} label={option.label} onClick={() => onChange({ ...filters, period: option.value })} />
+          ))}
+        </ChipRow>
+      ) : null}
+      {filters.board === 'playback' ? (
+        <ChipRow>
+          {PLAYBACK_FILTERS.map((option) => (
+            <Chip active={filters.filterBy === option.value} key={option.value} label={option.label} onClick={() => onChange({ ...filters, filterBy: option.value })} />
+          ))}
+        </ChipRow>
+      ) : null}
+      {filters.board === 'top250' ? (
+        <ChipRow>
+          {top250Years().map((year) => (
+            <Chip
+              active={filters.topType === 'year' && filters.topValue === String(year)}
+              key={year}
+              label={`${year}`}
+              onClick={() => onChange({ ...filters, topType: 'year', topValue: String(year) })}
+            />
+          ))}
+        </ChipRow>
+      ) : null}
     </div>
+  );
+}
+
+function ChipRow(props: { readonly children: ReactNode }) {
+  return <div className="flex gap-2 overflow-x-auto pb-1">{props.children}</div>;
+}
+
+function Chip(props: { readonly active: boolean; readonly label: string; readonly onClick: () => void }) {
+  return (
+    <button
+      className={`min-h-10 shrink-0 rounded-full px-3 text-xs font-medium ${props.active ? 'bg-brand text-white' : 'bg-white text-slate-600 ring-1 ring-line'}`}
+      onClick={props.onClick}
+      type="button"
+    >
+      {props.label}
+    </button>
   );
 }
 
@@ -119,101 +309,99 @@ function LoadingState() {
   );
 }
 
-function MovieRankingList(props: { readonly movies: Movie[]; readonly onOpen: (id: string) => void }) {
+function MovieRankingList(props: {
+  readonly movies: Movie[];
+  readonly onOpen: (id: string) => void;
+  readonly showLoader: boolean;
+  readonly hasMore: boolean;
+  readonly loadingMore: boolean;
+  readonly loaderRef: RefObject<HTMLDivElement | null>;
+}) {
   if (props.movies.length === 0) {
     return <p className="mt-4 rounded-md border border-line bg-white p-3 text-sm text-slate-500">暂无作品排行</p>;
   }
-  return <div className="mt-4 space-y-3">{props.movies.map((movie, index) => <MovieRankingCard index={index} key={movie.id} movie={movie} onOpen={() => props.onOpen(movie.id)} />)}</div>;
-}
-
-function MovieRankingCard(props: { readonly index: number; readonly movie: Movie; readonly onOpen: () => void }) {
   return (
-    <article className="rounded-lg border border-line bg-white p-3">
-      <div className="flex gap-3">
-        <button className="relative shrink-0 text-left" onClick={props.onOpen} type="button">
-          <RankBadge index={props.index} />
-          <MoviePoster alt={props.movie.number} className="h-32 w-24 rounded" src={props.movie.thumb_url} />
-        </button>
-        <PreviewCarousel images={props.movie.preview_images} />
-      </div>
-      <button className="mt-3 block w-full text-left" onClick={props.onOpen} type="button">
-        <span className="line-clamp-2 text-sm font-semibold text-ink">{props.movie.title}</span>
-        <span className="mt-1 block text-xs text-slate-500">{props.movie.number} · {props.movie.release_date}</span>
-      </button>
-    </article>
-  );
-}
-
-function RankBadge(props: { readonly index: number }) {
-  return <span className="absolute left-1 top-1 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-slate-900/90 text-xs font-semibold text-white">{props.index + 1}</span>;
-}
-
-function PreviewCarousel(props: { readonly images: PreviewImage[] | undefined }) {
-  const images = (props.images ?? []).slice(0, 3);
-  const [index, setIndex] = useState(0);
-  const swipe = usePreviewSwipe(() => setIndex((value) => Math.max(0, value - 1)), () => setIndex((value) => Math.min(images.length - 1, value + 1)));
-  if (images.length === 0) {
-    return <span className="flex aspect-video min-w-0 flex-1 rounded bg-slate-100" />;
-  }
-  return (
-    <div className="min-w-0 flex-1">
-      <div className="relative h-36 overflow-hidden rounded bg-slate-100" {...swipe}>
-        <img alt="" className="h-full w-full object-contain" loading="lazy" src={imgUrl(images[index].large_url || images[index].thumb_url)} />
-        <PreviewButton direction="previous" disabled={index === 0} onClick={() => setIndex(index - 1)} />
-        <PreviewButton direction="next" disabled={index >= images.length - 1} onClick={() => setIndex(index + 1)} />
-      </div>
+    <div className="mt-4 space-y-3">
+      {props.movies.map((movie, index) => (
+        <MovieRankingCard key={movie.id} movie={movie} onOpen={() => props.onOpen(movie.id)} rank={movieRank(movie, index)} />
+      ))}
+      {props.showLoader ? (
+        <div className="flex justify-center py-2" ref={props.loaderRef}>
+          {props.loadingMore ? (
+            <Loader2 className="animate-spin text-slate-400" size={20} />
+          ) : props.hasMore ? (
+            <span className="text-xs text-slate-300">上滑加载更多</span>
+          ) : (
+            <span className="text-xs text-slate-300">— 已加载全部 —</span>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function PreviewButton(props: { readonly direction: 'previous' | 'next'; readonly disabled: boolean; readonly onClick: () => void }) {
-  const isPrevious = props.direction === 'previous';
-  const Icon = isPrevious ? ChevronLeft : ChevronRight;
-  const position = isPrevious ? 'left-2' : 'right-2';
-  return <button aria-label={isPrevious ? '上一张预览图' : '下一张预览图'} className={`absolute ${position} top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white disabled:opacity-20`} disabled={props.disabled} onClick={props.onClick} type="button"><Icon size={18} /></button>;
+function MovieRankingCard(props: { readonly movie: Movie; readonly rank: number; readonly onOpen: () => void }) {
+  return (
+    <button className="flex w-full gap-3 rounded-lg border border-line bg-white p-3 text-left" onClick={props.onOpen} type="button">
+      <span className="relative shrink-0">
+        <RankBadge rank={props.rank} />
+        <MoviePoster alt={props.movie.number} className="h-32 w-24 rounded" src={props.movie.thumb_url} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-ink">{props.movie.number}</span>
+        <span className="mt-1 line-clamp-2 text-sm text-slate-600">{props.movie.title}</span>
+        <span className="mt-2 block text-xs text-slate-500">
+          {props.movie.release_date}
+          {props.movie.score ? ` · ⭐ ${props.movie.score}` : ''}
+        </span>
+        <span className="mt-2 flex flex-wrap gap-1">
+          {props.movie.has_cnsub ? <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">中字</span> : null}
+          {props.movie.can_play ? <span className="rounded bg-teal-50 px-2 py-0.5 text-xs text-brand">可播放</span> : null}
+        </span>
+      </span>
+    </button>
+  );
 }
 
-function usePreviewSwipe(onPrevious: () => void, onNext: () => void) {
-  const startX = useRef<number | null>(null);
-  const startY = useRef<number | null>(null);
-  return {
-    onTouchStart: (event: TouchEvent<HTMLDivElement>) => {
-      startX.current = event.changedTouches[0].clientX;
-      startY.current = event.changedTouches[0].clientY;
-    },
-    onTouchEnd: (event: TouchEvent<HTMLDivElement>) => {
-      if (startX.current === null || startY.current === null) return;
-      const deltaX = event.changedTouches[0].clientX - startX.current;
-      const deltaY = event.changedTouches[0].clientY - startY.current;
-      startX.current = null;
-      startY.current = null;
-      if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
-      if (deltaX < 0) {
-        onNext();
-        return;
-      }
-      onPrevious();
-    }
-  };
+function RankBadge(props: { readonly rank: number }) {
+  const tone =
+    props.rank === 1
+      ? 'bg-amber-400 text-amber-950'
+      : props.rank === 2
+        ? 'bg-slate-300 text-slate-800'
+        : props.rank === 3
+          ? 'bg-orange-400 text-orange-950'
+          : 'bg-slate-900/90 text-white';
+  return <span className={`absolute left-1 top-1 z-10 flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-xs font-semibold ${tone}`}>{props.rank}</span>;
 }
 
 function ActorRankingList(props: { readonly actors: RankingActor[]; readonly onOpen: (actor: ActorRef) => void }) {
   if (props.actors.length === 0) {
     return <p className="mt-4 rounded-md border border-line bg-white p-3 text-sm text-slate-500">暂无演员排行</p>;
   }
-  return <div className="mt-4 space-y-3">{props.actors.map((actor, index) => <ActorRankingCard actor={actor} index={index} key={actor.id} onOpen={() => props.onOpen(rankingActorRef(actor))} />)}</div>;
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-3">
+      {props.actors.map((actor, index) => (
+        <ActorRankingCard actor={actor} key={actor.id} onOpen={() => props.onOpen(rankingActorRef(actor))} rank={index + 1} />
+      ))}
+    </div>
+  );
 }
 
-function ActorRankingCard(props: { readonly actor: RankingActor; readonly index: number; readonly onOpen: () => void }) {
+function ActorRankingCard(props: { readonly actor: RankingActor; readonly rank: number; readonly onOpen: () => void }) {
   const name = rankingActorName(props.actor);
   return (
-    <button className="flex min-h-16 w-full items-center gap-3 rounded-lg border border-line bg-white p-3 text-left" onClick={props.onOpen} type="button">
-      <RankBadge index={props.index} />
-      {props.actor.avatar_url ? <img alt={name} className="h-12 w-12 rounded-lg object-cover" src={imgUrl(props.actor.avatar_url)} /> : <span className="h-12 w-12 rounded-lg bg-slate-100" />}
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold text-ink">{name}</span>
-        <span className="mt-1 block truncate text-xs text-slate-500">{props.actor.name}</span>
+    <button className="flex min-h-16 flex-col items-center rounded-lg border border-line bg-white p-3 text-center" onClick={props.onOpen} type="button">
+      <span className="relative">
+        <RankBadge rank={props.rank} />
+        {props.actor.avatar_url ? (
+          <img alt={name} className="h-20 w-20 rounded-full object-cover" src={imgUrl(props.actor.avatar_url)} />
+        ) : (
+          <span className="block h-20 w-20 rounded-full bg-slate-100" />
+        )}
       </span>
+      <span className="mt-2 w-full truncate text-sm font-semibold text-ink">{name}</span>
+      <span className="w-full truncate text-xs text-slate-500">{props.actor.name}</span>
     </button>
   );
 }
@@ -229,6 +417,80 @@ function rankingActorRef(actor: RankingActor): ActorRef {
     avatar_url: actor.avatar_url ?? '',
     profile_url: `https://javdb.com/actors/${actor.id}`
   };
+}
+
+function movieRank(movie: Movie, index: number): number {
+  return movie.ranking ?? index + 1;
+}
+
+function categoryActive(filters: RankingFilters, category: Category): boolean {
+  if (filters.board === 'top250') {
+    return filters.topType === 'video_type' && filters.topValue === category;
+  }
+  return filters.category === category;
+}
+
+function selectCategory(filters: RankingFilters, category: Category): RankingFilters {
+  if (filters.board === 'top250') {
+    return { ...filters, topType: 'video_type', topValue: category };
+  }
+  return { ...filters, category };
+}
+
+function top250Years(): number[] {
+  const current = new Date().getFullYear();
+  const years: number[] = [];
+  for (let year = current; year >= TOP250_START_YEAR; year -= 1) {
+    years.push(year);
+  }
+  return years;
+}
+
+function parseFilters(search: string): RankingFilters {
+  const params = new URLSearchParams(search);
+  return normalizeFilters({
+    board: parseUnion(params.get('board'), BOARDS.map((item) => item.value), DEFAULT_FILTERS.board),
+    category: parseUnion(params.get('type'), CATEGORIES.map((item) => item.value), DEFAULT_FILTERS.category),
+    period: parseUnion(params.get('period'), PERIODS.map((item) => item.value), DEFAULT_FILTERS.period),
+    filterBy: parseUnion(params.get('filter_by'), PLAYBACK_FILTERS.map((item) => item.value), DEFAULT_FILTERS.filterBy),
+    topType: parseUnion(params.get('topType'), ['all', 'video_type', 'year'] as const, DEFAULT_FILTERS.topType),
+    topValue: params.get('topValue') ?? ''
+  });
+}
+
+function writeFilters(filters: RankingFilters) {
+  const params = new URLSearchParams();
+  params.set('board', filters.board);
+  if (filters.board === 'movies' || filters.board === 'actors') {
+    params.set('type', filters.category);
+  }
+  if (filters.board === 'movies' || filters.board === 'playback') {
+    params.set('period', filters.period);
+  }
+  if (filters.board === 'playback') {
+    params.set('filter_by', filters.filterBy);
+  }
+  if (filters.board === 'top250') {
+    params.set('topType', filters.topType);
+    if (filters.topValue) {
+      params.set('topValue', filters.topValue);
+    }
+  }
+  const next = `${window.location.pathname}?${params.toString()}`;
+  if (`${window.location.pathname}${window.location.search}` === next) {
+    return;
+  }
+  window.history.replaceState(window.history.state, '', next);
+}
+
+function normalizeFilters(filters: RankingFilters): RankingFilters {
+  const category = filters.board === 'actors' && filters.category === '3' ? '0' : filters.category;
+  const topValue = filters.topType === 'all' ? '' : filters.topValue;
+  return { ...filters, category, topValue };
+}
+
+function parseUnion<T extends string>(value: string | null, allowed: readonly T[], fallback: T): T {
+  return allowed.find((item) => item === value) ?? fallback;
 }
 
 async function loadFollows(setFollows: (follows: Follow[]) => void) {

@@ -255,7 +255,7 @@ class JavdbApiClient:
         )
         return self._list_value(data, "reviews")
 
-    def rankings(self, rtype: str = "0", period: str = "today") -> list[dict[str, Any]]:
+    def rankings(self, rtype: str = "0", period: str = "daily") -> list[dict[str, Any]]:
         data = self._dict_value(
             self._get("/api/v1/rankings", f"type={rtype}&period={period}"),
             "data",
@@ -274,12 +274,31 @@ class JavdbApiClient:
         )
         return self._list_value(data, "movies")
 
-    def rankings_actors(self, rtype: str = "monthly") -> list[dict[str, Any]]:
+    def rankings_actors(self, rtype: str = "0") -> list[dict[str, Any]]:
         data = self._dict_value(
             self._get("/api/v1/rankings/actors", f"type={rtype}"),
             "data",
         )
         return self._list_value(data, "actors")
+
+    def movies_top(
+        self,
+        page: int = 1,
+        limit: int = 50,
+        rtype: str = "all",
+        type_value: str = "",
+        start_rank: int = 1,
+    ) -> list[dict[str, Any]]:
+        payload = self._get(
+            "/api/v1/movies/top",
+            (
+                f"start_rank={start_rank}&type={rtype}&type_value={type_value}"
+                f"&ignore_watched=false&page={page}&limit={limit}"
+            ),
+        )
+        if payload.get("success") == 0 or payload.get("action") == "JWTVerificationError":
+            raise IntegrationError("TOP250 需要 JavDB 登录，当前仅使用公开接口，无法加载")
+        return self._list_value(self._dict_value(payload, "data"), "movies")
 
     def search(self, query: str) -> list[dict[str, Any]]:
         data = self._dict_value(self._get("/api/v2/search", f"q={query}"), "data")

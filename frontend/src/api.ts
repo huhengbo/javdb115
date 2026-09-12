@@ -122,11 +122,19 @@ export const client = {
   },
   moviesByTag: (filterBy: string) => api<Movie[]>(`/api/javdb/movies/tags?filter_by=${encodeURIComponent(filterBy)}`),
   moviesRecommend: (period?: string) => api<Movie[]>(`/api/javdb/movies/recommend?period=${period ?? 'daily'}`),
-  rankings: (type = '0', period = 'today') =>
+  moviesTop: (page = 1, limit = 50, type = 'all', typeValue = '') => {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('limit', String(limit));
+    params.set('type', type);
+    if (typeValue) params.set('type_value', typeValue);
+    return api<Movie[]>(`/api/javdb/movies/top?${params.toString()}`);
+  },
+  rankings: (type = '0', period = 'daily') =>
     api<Movie[]>(`/api/javdb/rankings?type=${encodeURIComponent(type)}&period=${encodeURIComponent(period)}`),
   rankingsPlayback: (period = 'daily', filterBy = 'high_score') =>
     api<Movie[]>(`/api/javdb/rankings/playback?period=${encodeURIComponent(period)}&filter_by=${encodeURIComponent(filterBy)}`),
-  rankingsActors: (type = 'monthly') =>
+  rankingsActors: (type = '0') =>
     api<RankingActor[]>(`/api/javdb/rankings/actors?type=${encodeURIComponent(type)}`),
   actorDetail: (id: string) => api<ActorDetail>(`/api/javdb/actors/${id}`),
   actorMovies: (id: string, tagIds: string[], sortType: number, page = 1, limit = 24) => {
