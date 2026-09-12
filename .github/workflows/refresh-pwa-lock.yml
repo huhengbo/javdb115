@@ -1,0 +1,45 @@
+name: Refresh PWA lock
+
+on:
+  push:
+    branches: [feat/mobile-pwa]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: feat/mobile-pwa
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Refresh frontend lock
+        working-directory: frontend
+        run: npm install --save-dev vite-plugin-pwa@^1.3.0
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high
+      - name: Verify frontend
+        working-directory: frontend
+        run: |
+          npm run lint
+          npm test
+          npm run build
+      - name: Commit lock file
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package.json frontend/package-lock.json
+          if git diff --cached --quiet; then
+            echo "Lock file already current"
+            exit 0
+          fi
+          git commit -m "chore(frontend): refresh PWA dependency lock"
+          git push
