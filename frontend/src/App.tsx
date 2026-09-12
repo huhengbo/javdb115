@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { clearToken, getToken } from './api';
+import { currentUser, logout as logoutRequest } from './api';
 import { AppShell } from './components/AppShell';
 import { DashboardPage } from './pages/DashboardPage';
 import { DiscoveryPage } from './pages/DiscoveryPage';
@@ -10,6 +10,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { TasksPage } from './pages/TasksPage';
 
 type Tab = 'dashboard' | 'discovery' | 'rankings' | 'following' | 'tasks' | 'settings';
+type AuthState = 'loading' | 'authenticated' | 'anonymous';
 
 const TAB_PATHS: Record<Tab, string> = {
   dashboard: '/',
@@ -21,12 +22,11 @@ const TAB_PATHS: Record<Tab, string> = {
 };
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(Boolean(getToken()));
+  const [authState, setAuthState] = useState<AuthState>('loading');
   const [tab, setTab] = useState<Tab>(() => tabFromPath(window.location.pathname));
 
   const logout = useCallback(() => {
-    clearToken();
-    setLoggedIn(false);
+    void logoutRequest().finally(() => setAuthState('anonymous'));
   }, []);
 
   const changeTab = useCallback((nextTab: Tab) => {
@@ -38,11 +38,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    setLoggedIn(Boolean(getToken()));
+    void currentUser()
+      .then(() => setAuthState('authenticated'))
+      .catch(() => setAuthState('anonymous'));
   }, []);
 
   useEffect(() => {
-    const handler = () => setLoggedIn(false);
+    const handler = () => setAuthState('anonymous');
     window.addEventListener('auth-expired', handler);
     return () => window.removeEventListener('auth-expired', handler);
   }, []);
@@ -53,8 +55,12 @@ export default function App() {
     return () => window.removeEventListener('popstate', handler);
   }, []);
 
-  if (!loggedIn) {
-    return <LoginPage onLoggedIn={() => setLoggedIn(true)} />;
+  if (authState === 'loading') {
+    return <main className="flex min-h-dvh items-center justify-center bg-mist text-sm text-slate-600">正在检查登录状态...</main>;
+  }
+
+  if (authState === 'anonymous') {
+    return <LoginPage onLoggedIn={() => setAuthState('authenticated')} />;
   }
 
   return (
