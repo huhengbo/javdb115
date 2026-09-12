@@ -4,6 +4,8 @@ import type {
   DirectoryItem,
   Follow,
   FollowCheckResult,
+  JavdbLoginResult,
+  JavdbLoginStatus,
   ManualOfflineResult,
   MagnetItem,
   Movie,
@@ -21,6 +23,20 @@ import type {
   TelegramTestResult
 } from './types';
 
+export const JAVDB_AUTH_REQUIRED_EVENT = 'javdb-auth-required';
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set('Content-Type', 'application/json');
@@ -35,7 +51,11 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     if (response.status === 401 && path !== '/api/auth/login') {
       window.dispatchEvent(new CustomEvent('auth-expired'));
     }
-    throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
+    throw new ApiError(
+      response.status,
+      payload?.error?.code ?? 'http_error',
+      payload?.error?.message ?? `HTTP ${response.status}`
+    );
   }
   if (payload === null) {
     throw new Error(`Invalid JSON response: ${path}`);
@@ -56,6 +76,10 @@ export function currentUser(): Promise<{ username: string }> {
 
 export function logout(): Promise<{ ok: boolean }> {
   return api('/api/auth/logout', { method: 'POST' });
+}
+
+function emitJavdbAuthRequired(feature: string) {
+  window.dispatchEvent(new CustomEvent(JAVDB_AUTH_REQUIRED_EVENT, { detail: { feature } }));
 }
 
 export const client = {
@@ -87,6 +111,13 @@ export const client = {
     api<P115QrStatus>(`/api/settings/115/login/qrcode/${encodeURIComponent(sessionId)}`),
   cancelP115QrLogin: (sessionId: string) =>
     api<{ ok: boolean }>(`/api/settings/115/login/qrcode/${encodeURIComponent(sessionId)}/cancel`, { method: 'POST' }),
+  javdbLoginStatus: () => api<JavdbLoginStatus>('/api/settings/javdb/login'),
+  loginJavdb: (username: string, password: string) =>
+    api<JavdbLoginResult>('/api/settings/javdb/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    }),
+  logoutJavdb: () => api<{ ok: boolean }>('/api/settings/javdb/logout', { method: 'POST' }),
 
   // Follows API
   follows: () => api<Follow[]>('/api/follows'),
@@ -127,13 +158,21 @@ export const client = {
   },
   moviesByTag: (filterBy: string) => api<Movie[]>(`/api/javdb/movies/tags?filter_by=${encodeURIComponent(filterBy)}`),
   moviesRecommend: (period?: string) => api<Movie[]>(`/api/javdb/movies/recommend?period=${period ?? 'daily'}`),
-  moviesTop: (page = 1, limit = 50, type = 'all', typeValue = '') => {
+  moviesTop: async (page = 1, limit = 50, type = 'all', typeValue = '') => {
     const params = new URLSearchParams();
     params.set('page', String(page));
     params.set('limit', String(limit));
     params.set('type', type);
     if (typeValue) params.set('type_value', typeValue);
-    return api<Movie[]>(`/api/javdb/movies/top?${params.toString()}`);
+    try {
+      return await api<Movie[]>(`/api/javdb/movies/top?${params.toString()}`);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'javdb_auth_required') {
+        emitJavdbAuthRequired('TOP250');
+        return [];
+      }
+      throw err;
+    }
   },
   rankings: (type = '0', period = 'daily') =>
     api<Movie[]>(`/api/javdb/rankings?type=${encodeURIComponent(type)}&period=${encodeURIComponent(period)}`),
