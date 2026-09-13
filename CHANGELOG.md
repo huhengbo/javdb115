@@ -4,6 +4,7 @@ All notable changes to this project are documented here. The project follows Sem
 
 ## [Unreleased]
 
+- 作品详情热门评论会自动识别 `magnet:` 与 `ed2k://|file|...|/` 离线链接；点击后弹出确认，确认即可直接加入 115 离线下载。
 - 后端接入独立 JavDB App client：登录换 token，统一封装现有公开接口，并补充演员/片商/系列目录、磁链搜索、以图搜片、片单文章，以及收藏/想看/播放等需登录方法。广告和支付下单不接入。
 
 ## [0.1.1] - 2026-09-12
