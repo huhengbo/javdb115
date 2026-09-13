@@ -7,10 +7,12 @@ const topMovie = movie('top-1', 'TOP-001', 'TOP250 作品');
 
 let savedSettings: Array<{ key: string; value: string; is_secret: boolean }> = [];
 let javdbLoggedIn = false;
+let quickOfflineSubmissions: string[] = [];
 
 test.beforeEach(async ({ page }) => {
   savedSettings = [];
   javdbLoggedIn = false;
+  quickOfflineSubmissions = [];
   await mockApi(page);
 });
 
@@ -27,6 +29,22 @@ test('mobile search clears an in-flight result and keeps the latest list', async
   await page.waitForTimeout(350);
   await expect(page.getByText('OLD-999')).toHaveCount(0);
   await expect(page.getByText('ABC-001')).toBeVisible();
+});
+
+test('quick tools submit a direct 115 offline address from any page', async ({ page }) => {
+  await page.goto('/discovery');
+  const trigger = page.getByRole('button', { name: '快捷工具' });
+  await expect(trigger).toBeVisible();
+  await trigger.click();
+
+  const dialog = page.getByRole('dialog', { name: '快捷工具' });
+  await expect(dialog).toBeVisible();
+  await page.getByRole('button', { name: /115 离线下载/ }).click();
+  await page.getByLabel('磁力链接或离线地址').fill('https://example.com/video');
+  await page.getByRole('button', { name: '提交到 115' }).click();
+
+  await expect(page.getByRole('status')).toContainText('已提交到 115');
+  expect(quickOfflineSubmissions).toEqual(['https://example.com/video']);
 });
 
 test('settings preserve multiline filter drafts and save normalized values', async ({ page }) => {
@@ -152,6 +170,11 @@ async function handleApi(route: Route) {
   if (path === '/api/javdb/search') {
     await new Promise((resolve) => setTimeout(resolve, 250));
     return json(route, [staleSearchMovie]);
+  }
+  if (path === '/api/tools/offline' && request.method() === 'POST') {
+    const payload = JSON.parse(request.postData() ?? '{}');
+    quickOfflineSubmissions.push(String(payload.url ?? ''));
+    return json(route, { ok: true, task_id: 'offline-1' });
   }
   if (path === '/api/settings/javdb/login' && request.method() === 'GET') {
     return json(route, javdbLoggedIn
