@@ -4,8 +4,60 @@ All notable changes to this project are documented here. The project follows Sem
 
 ## [Unreleased]
 
-- 作品详情热门评论会自动识别 `magnet:` 与 `ed2k://|file|...|/` 离线链接；点击后弹出确认，确认即可直接加入 115 离线下载。
-- 后端接入独立 JavDB App client：登录换 token，统一封装现有公开接口，并补充演员/片商/系列目录、磁链搜索、以图搜片、片单文章，以及收藏/想看/播放等需登录方法。广告和支付下单不接入。
+## [0.1.2] - 2026-09-13
+
+> 本版本聚焦 JavDB 登录与 App API 能力、移动端 Quiet Utility 体验收敛，以及作品详情与 115 离线下载交互完善。
+
+### ✨ 主要更新
+
+- 接入独立 JavDB App API client：支持账号登录换取 token，并统一封装现有公开接口；补充演员、片商、系列目录、磁链搜索、以图搜片、片单文章以及收藏/想看/播放等登录态能力。广告和支付下单接口不接入。
+- 设置页新增 JavDB 账号登录、状态展示与退出；TOP250 在未登录或登录失效时提供明确的“去登录”引导，登录成功后自动返回原排行与筛选上下文。
+- 恢复全局悬浮快捷工具入口，当前提供“115 离线下载”；可直接粘贴 magnet / HTTP / HTTPS / ED2K 地址提交到配置的 115 下载临时目录，并为后续扩展更多工具保留入口。
+- 作品详情磁力操作改为紧凑的 `115 离线 / 复制 / 打开` 操作行，不再使用占满整行的大按钮。
+- 热门评论自动识别 `magnet:` 与 `ed2k://|file|...|/` 离线链接；点击后先确认，再直接加入 115 离线下载，同一条评论支持多个离线链接。
+
+### 📱 交互改进
+
+- 移动端 UI 收敛为 Quiet Utility：减少模板化卡片、阴影、说明性副标题与过度强调，让信息层级、列表密度和操作优先级更接近原生工具型应用。
+- 外观模式简化为自动、浅色、深色三种；自动模式跟随系统 `prefers-color-scheme`，并保留启动时的早期主题初始化以减少闪烁。
+- 修复预览大图在相邻图片已缓存时切换后可能永久停留在“大图加载中”的竞态；继续保留跟手拖拽、边缘阻尼、回弹、左右按钮与键盘切换。
+- 排行筛选、任务筛选等模态 Bottom Sheet 统一显示在底部 TabBar 之上，底部操作与 safe-area 不再被导航栏遮挡；作品/演员详情仍保留既有全局导航行为。
+- 全局快捷工具在普通页面与作品详情中保持可用，并在无关输入框唤起移动端键盘时自动避让。
+
+### 🛠️ 可靠性与安全
+
+- 新增独立的 `javdb_auth_required` 业务错误，避免 JavDB 登录失效被误判为应用自身登录过期；Dashboard 会正确标记过期的 JavDB 登录状态为异常。
+- JavDB 登录密码仅用于换取 token，不持久化密码；登录 token 按现有敏感设置机制保存，并避免在前端回显。
+- JavDB 公共请求缓存按 token 指纹隔离，避免不同登录态之间复用错误缓存；图片代理与 CDN 重写继续兼容现有预览资源处理。
+- Docker runtime 在构建阶段应用 Debian 安全更新，继续通过 Trivy HIGH/CRITICAL 门禁与 non-root 运行检查。
+- 补充 JavDB 登录/TOP250 引导、全局快捷工具、评论离线链接、Lightbox 缓存切换、Bottom Sheet 层级等浏览器与后端回归覆盖。
+- 完整 CI 继续覆盖 Python 3.12 / 3.13、Frontend lint/test/build、Mobile browser interactions、Web E2E smoke 和 Docker `amd64` / `arm64` 安全构建。
+
+### 🐳 Docker / GHCR
+
+- 镜像：`ghcr.io/huhengbo/javdb115`
+- 架构：`linux/amd64`、`linux/arm64`。
+- 正式版本发布：`0.1.2`、`0.1`、`latest`、`sha-*`。
+- `master` 继续发布 `edge` 和 `sha-*`，不覆盖正式版 `latest`。
+- 镜像继续附带 SBOM 与 provenance，并在发布前执行 Trivy HIGH/CRITICAL 扫描和 non-root smoke test。
+
+### 📦 升级说明
+
+- **从 `0.1.1` / `latest` 升级**：直接拉取 `ghcr.io/huhengbo/javdb115:0.1.2` 或新的 `:latest` 并重建容器即可。
+- **无业务数据库迁移要求**：本版本不要求手工修改现有 SQLite 数据，现有任务、关注与设置可继续使用。
+- **必须保持 `APP_SECRET_KEY` 不变**：已有加密的 115 Cookie、Telegram Token 以及新增的 JavDB 登录 token 依赖该密钥解密；更换密钥会要求重新登录或重新配置敏感项。
+- **JavDB 登录**：公开发现/搜索/普通排行仍可继续使用；TOP250 等受保护能力需要在设置中登录 JavDB。
+- **快捷离线下载**：使用全局快捷工具或评论区离线链接前，请确认设置中已经选择 115 下载临时目录。
+- **Docker Compose**：执行 `docker compose pull` 后重新创建容器即可；不要删除持久化数据库目录/卷。
+- **PWA 用户**：服务端升级后通过现有更新机制刷新到新版前端；如仍看到旧界面，优先使用应用内更新提示或重新刷新页面，无需卸载应用。
+- 升级前仍建议保留数据库备份。
+
+### ✅ 兼容性
+
+- Docker：Linux `amd64` / `arm64`。
+- 后端 CI：Python 3.12、3.13。
+- 前端：现代 Chromium/Safari；继续以 Android Chrome/Chromium 和 iOS Safari/PWA 为主要移动端目标。
+- 主要移动验收宽度：320px、390px、430px；桌面端保持正常可用。
 
 ## [0.1.1] - 2026-09-12
 
