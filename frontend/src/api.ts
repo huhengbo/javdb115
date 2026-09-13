@@ -111,6 +111,11 @@ export const client = {
     api<P115QrStatus>(`/api/settings/115/login/qrcode/${encodeURIComponent(sessionId)}`),
   cancelP115QrLogin: (sessionId: string) =>
     api<{ ok: boolean }>(`/api/settings/115/login/qrcode/${encodeURIComponent(sessionId)}/cancel`, { method: 'POST' }),
+  quickOfflineDownload: (url: string) =>
+    api<{ ok: boolean; task_id: string }>('/api/tools/offline', {
+      method: 'POST',
+      body: JSON.stringify({ url })
+    }),
   javdbLoginStatus: () => api<JavdbLoginStatus>('/api/settings/javdb/login'),
   loginJavdb: (username: string, password: string) =>
     api<JavdbLoginResult>('/api/settings/javdb/login', {
