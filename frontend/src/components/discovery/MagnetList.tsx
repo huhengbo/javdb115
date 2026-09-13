@@ -1,4 +1,4 @@
-import { Copy, ExternalLink } from 'lucide-react';
+import { Copy, Download, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import type { MagnetItem } from '../../types';
 import { formatMagnetSize } from '../../lib/javdb';
@@ -62,10 +62,10 @@ function MagnetCard(props: {
         {magnet.hd ? <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">高清</span> : null}
         {magnet.created_at ? <span className="px-1 py-1">{magnet.created_at}</span> : null}
       </div>
-      <button className="mt-3 min-h-12 w-full rounded-md bg-brand px-3 text-sm font-medium text-white active:opacity-85" onClick={() => onSelect(magnet)} type="button">提交到 115</button>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <button className="flex min-h-10 items-center justify-center gap-1 rounded-md border border-line bg-white text-xs text-slate-600" onClick={() => void onCopy(magnet)} type="button"><Copy size={14} />复制磁力</button>
-        <a className="flex min-h-10 items-center justify-center gap-1 rounded-md border border-line bg-white text-xs text-slate-600" href={magnetHref(magnet)}><ExternalLink size={14} />外部打开</a>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <button className="flex min-h-11 items-center justify-center gap-1 rounded-md bg-brand px-2 text-xs font-medium text-white active:opacity-85" onClick={() => onSelect(magnet)} type="button"><Download size={15} />115 离线</button>
+        <button className="flex min-h-11 items-center justify-center gap-1 rounded-md border border-line bg-white px-2 text-xs text-slate-600" onClick={() => void onCopy(magnet)} type="button"><Copy size={14} />复制</button>
+        <a className="flex min-h-11 items-center justify-center gap-1 rounded-md border border-line bg-white px-2 text-xs text-slate-600" href={magnetHref(magnet)}><ExternalLink size={14} />打开</a>
       </div>
     </article>
   );
