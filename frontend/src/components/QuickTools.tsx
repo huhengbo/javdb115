@@ -4,7 +4,11 @@ import { client } from '../api';
 
 type ToolView = 'menu' | 'offline';
 
-export function QuickTools() {
+type Props = {
+  readonly hidden?: boolean;
+};
+
+export function QuickTools({ hidden = false }: Props) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<ToolView>('menu');
   const [url, setUrl] = useState('');
@@ -46,16 +50,18 @@ export function QuickTools() {
 
   return (
     <>
-      <button
-        aria-expanded={open}
-        aria-label="快捷工具"
-        className="fixed z-[85] flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-lg active:scale-95"
-        onClick={() => setOpen(true)}
-        style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom))', right: 'max(1rem, calc((100vw - 48rem) / 2 + 1rem))' }}
-        type="button"
-      >
-        <Wrench size={20} />
-      </button>
+      {!hidden || open ? (
+        <button
+          aria-expanded={open}
+          aria-label="快捷工具"
+          className="fixed z-[85] flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-lg active:scale-95"
+          onClick={() => setOpen(true)}
+          style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom))', right: 'max(1rem, calc((100vw - 48rem) / 2 + 1rem))' }}
+          type="button"
+        >
+          <Wrench size={20} />
+        </button>
+      ) : null}
 
       {open ? (
         <div className="fixed inset-0 z-[86] flex items-end justify-center bg-slate-900/35 sm:items-center" role="presentation" onClick={close}>
