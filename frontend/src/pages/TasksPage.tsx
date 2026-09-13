@@ -177,7 +177,7 @@ function FilterSheet(props: { readonly mode: 'progress' | 'more'; readonly activ
     ? TASK_FILTERS.filter((filter) => PROGRESS_FILTERS.has(filter.value))
     : TASK_FILTERS.filter((filter) => !PRIMARY_FILTERS.has(filter.value));
   return (
-    <div className="fixed inset-0 z-[70] flex items-end bg-slate-900/35" role="presentation" onClick={props.onClose}>
+    <div className="fixed inset-0 z-[90] flex items-end bg-slate-900/35" role="presentation" onClick={props.onClose}>
       <div aria-label={props.mode === 'progress' ? '进行中筛选' : '更多任务筛选'} aria-modal="true" className="ui-surface-elevated w-full rounded-b-none p-4 pb-[max(1rem,env(safe-area-inset-bottom))]" role="dialog" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between"><h2 className="text-base font-semibold text-ink">{props.mode === 'progress' ? '进行中状态' : '更多筛选'}</h2><button aria-label="关闭筛选" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500" onClick={props.onClose} type="button"><X size={19} /></button></div>
         <div className="quiet-list mt-2">

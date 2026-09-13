@@ -171,7 +171,7 @@ function RankingFilterSheet(props: { readonly filters: RankingFilters; readonly 
   const showPeriod = filters.board === 'movies' || filters.board === 'playback';
   const categories = filters.board === 'actors' ? CATEGORIES.filter((item) => item.value !== '3') : CATEGORIES;
   return (
-    <div className="fixed inset-0 z-[70] flex items-end bg-slate-900/35" role="presentation" onClick={props.onClose}>
+    <div className="fixed inset-0 z-[90] flex items-end bg-slate-900/35" role="presentation" onClick={props.onClose}>
       <div aria-label="排行筛选" aria-modal="true" className="ui-surface-elevated max-h-[78dvh] w-full overflow-y-auto rounded-b-none p-4 pb-[max(1rem,env(safe-area-inset-bottom))]" role="dialog" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between"><h2 className="text-base font-semibold text-ink">筛选</h2><button aria-label="关闭筛选" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500" onClick={props.onClose} type="button"><X size={19} /></button></div>
         <div className="mt-3 space-y-4">
