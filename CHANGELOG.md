@@ -33,3 +33,100 @@ All notable changes to this project are documented here. The project follows Sem
 - 完整 CI 覆盖 Python 3.12 / 3.13、Frontend lint/test/build、Mobile browser interactions、Web E2E smoke 和 Docker 双架构安全构建。
 
 ### 🐳 Docker / GHCR
+
+- 镜像：`ghcr.io/huhengbo/javdb115`
+- 架构：`linux/amd64`、`linux/arm64`
+- 正式版本发布：`0.1.1`、`0.1`、`latest`、`sha-*`。
+- `master` 继续发布 `edge` 和 `sha-*`，不覆盖正式版 `latest`。
+- 镜像继续附带 SBOM 与 provenance，并在发布前执行 Trivy HIGH/CRITICAL 扫描和 non-root smoke test。
+
+### 📦 升级说明
+
+- **从 `0.1.0` / `latest` 升级**：直接拉取 `ghcr.io/huhengbo/javdb115:0.1.1` 或新的 `:latest` 并重建容器即可。
+- **无业务数据迁移要求**：本版本主要为前端交互和任务查询能力升级，不要求手工修改现有 SQLite 数据。
+- **必须保持 `APP_SECRET_KEY` 不变**：已有加密的 115 Cookie / Telegram Token 依赖该密钥解密。
+- **Docker Compose**：执行 `docker compose pull` 后重新创建容器即可；不要删除持久化数据库目录/卷。
+- **PWA 用户**：服务端升级后，已安装应用会通过现有更新机制加载新版前端，无需卸载重装。
+- 升级前仍建议保留数据库备份。
+
+### ✅ 兼容性
+
+- Docker：Linux `amd64` / `arm64`。
+- 后端 CI：Python 3.12、3.13。
+- 前端：现代 Chromium/Safari；继续以 Android Chrome/Chromium 和 iOS Safari/PWA 为主要移动端目标。
+- 主要移动验收宽度：320px、390px、430px；桌面端保持正常可用。
+
+## [0.1.0] - 2026-09-12
+
+> JavDB 115 首个正式公开版本。以移动端使用为主，提供 JavDB 作品发现、115 离线下载与整理、关注订阅、任务跟踪和 Telegram 通知，并可作为 PWA 安装到手机主屏幕。
+
+### ✨ 主要更新
+
+- 提供 JavDB 最新作品、搜索、作品排行、演员排行、演员详情和作品详情浏览。
+- 支持选择磁力并提交到 115 离线下载，记录下载、整理及失败恢复状态。
+- 支持演员关注、标签筛选、定时检查和 Telegram 通知。
+- 支持统一整理目录或按有码、无码、FC2 分类整理。
+- 提供安装到手机主屏幕的 PWA：Android/Chromium 可直接安装，iOS 提供“添加到主屏幕”指引。
+- PWA 使用独立窗口、移动端安全区、离线基础壳和可控的新版本刷新提示；`/api/**` 私有响应不进入 Service Worker 缓存。
+
+### 📱 移动端与交互
+
+- 以 320–430px 手机宽度作为主要验收范围，保留底部五栏导航并适配刘海、圆角和底部手势区域。
+- 当前 Tab 可再次点击回到顶部，并逐步保留搜索、筛选和浏览上下文。
+- 搜索、分页、弹层、目录选择、任务卡片、磁力选择和设置保存针对单手操作优化。
+- 弹窗和详情层统一返回层级、滚动隔离、焦点恢复和 safe-area 行为。
+- 支持图片懒加载、失败占位、预览图浏览和移动端触控反馈。
+- 提供四套轻量主题预设：Harbor（海盐青）、Graphite（石墨夜）、Paper（暖纸）、Blueprint（高对比蓝图），并支持减少运动模式。
+
+### 🛠️ 修复与可靠性
+
+- 修复多行关键词输入吞回车/空格、中文输入法组合期间被重写，以及数字字段无法临时清空的问题。
+- 修复搜索、排行和演员作品请求的过期响应覆盖新状态，以及无限滚动失败后跳过页码的问题。
+- 修复演员榜排名徽标定位错误。
+- 修复设置扫码登录可能覆盖其他未保存草稿的问题，并补充移动端粘底保存/放弃入口。
+- 完善任务和关注操作的首次加载、后台刷新、错误、忙碌与成功反馈。
+- 完善 115 扫码登录的串行轮询、过期重试、取消失败和旧会话响应隔离。
+- 优化目录选择为“整行进入 + 底部确认当前目录”，减少窄屏误触。
+- 任务卡片改为摘要优先、详情按需展开；正常任务不再常驻危险删除操作。
+- 磁力列表在手机上采用纵向布局，“提交到 115”为主操作，外部 magnet 打开降为明确次要操作。
+
+### 🔐 安全与工程
+
+- 浏览器认证改用 HttpOnly Session Cookie，不再将认证 token 存入 `localStorage`。
+- 115 Cookie 和 Telegram Bot Token 通过 API 只写不回显，并使用从 `APP_SECRET_KEY` 派生的密钥进行 AES-GCM 静态加密。
+- 增加登录失败限流/临时锁定、基础安全响应头和敏感设置服务端白名单。
+- 增加版本化 SQLite migration、备份/恢复工具和数据库升级测试。
+- Docker 运行时使用非 root 用户，依赖锁定，并在发布前运行 Trivy HIGH/CRITICAL 扫描和 non-root smoke test。
+- 前端、后端 Python 3.12/3.13、Web E2E、PWA 产物、浏览器交互和双架构 Docker 进入 CI 门禁。
+
+### 🐳 Docker / GHCR
+
+- 镜像：`ghcr.io/huhengbo/javdb115`
+- 架构：`linux/amd64`、`linux/arm64`
+- 正式版本会同时发布：`0.1.0`、`0.1`、`latest`、`sha-*`。
+- `master` 持续发布 `edge` 和 `sha-*`，不覆盖 `latest`。
+- 镜像附带 SBOM 与 provenance。
+
+### 📦 升级说明
+
+- **首次正式版本**：如果是首次部署，直接使用 `ghcr.io/huhengbo/javdb115:0.1.0` 或 `:latest`。
+- **从当前测试/edge 版本升级**：可直接切换到 `0.1.0` / `latest` 并重建容器，不需要手工修改现有业务数据。
+- **数据库升级**：启动时按版本执行 SQLite migration；升级前仍建议保留数据库备份。仓库同时提供备份/恢复工具。
+- **必须保持 `APP_SECRET_KEY` 不变**：已有加密的 115 Cookie / Telegram Token 依赖该密钥解密。更换或丢失密钥会导致已加密敏感设置无法读取，需要重新配置。
+- **Docker Compose**：拉取新镜像后重新创建容器即可；持久化数据库目录/卷不要删除。
+- **PWA 用户**：服务端升级后，已安装到手机的应用会提示“有新版本”，确认刷新即可更新静态前端；无需卸载重装。
+- **浏览器/PWA 缓存**：如部署后仍看到旧 UI，优先使用应用内更新提示或刷新；通常不需要清理业务数据。
+- **无配置迁移要求**：本版本不要求将 115/Telegram 配置迁移到新的配置文件格式。
+
+### ✅ 兼容性
+
+- Docker：Linux `amd64` / `arm64`。
+- 后端 CI：Python 3.12、3.13。
+- 前端：现代 Chromium/Safari；主要面向 Android Chrome/Chromium 系浏览器和 iOS Safari/PWA。
+- PC/平板维持正常可用，但产品交互以移动端优先。
+- 115 访问依赖有效账号状态和 Cookie；第三方服务自身规则变化不属于应用兼容承诺。
+
+### 📌 项目说明
+
+- 当前维护：`huhengbo/javdb115`
+- License：MIT
