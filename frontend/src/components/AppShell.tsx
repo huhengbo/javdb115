@@ -4,6 +4,7 @@ import { JAVDB_AUTH_REQUIRED_EVENT } from '../api';
 import { JavdbLoginPanel } from './JavdbLoginPanel';
 import { PwaInstallPanel } from './PwaInstallPanel';
 import { PwaUpdatePrompt } from './PwaUpdatePrompt';
+import { QuickTools } from './QuickTools';
 import { ThemePicker } from './ThemePicker';
 
 type Tab = 'dashboard' | 'discovery' | 'rankings' | 'following' | 'tasks' | 'settings';
@@ -104,6 +105,7 @@ export function AppShell({ active, javdbLoginRequestId, onChange, onJavdbAuthCha
           </div>
         </nav>
       ) : null}
+      <QuickTools hidden={keyboardVisible} />
       <PwaUpdatePrompt />
     </div>
   );
@@ -144,6 +146,5 @@ function useKeyboardVisible() {
       delete document.documentElement.dataset.keyboard;
     };
   }, []);
-
   return visible;
 }
