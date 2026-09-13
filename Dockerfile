@@ -34,7 +34,10 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:${PATH}"
 
-RUN python -m pip uninstall --yes msgpack setuptools \
+RUN apt-get update \
+    && apt-get upgrade --yes \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip uninstall --yes msgpack setuptools \
     && python -m pip uninstall --yes pip \
     && rm -rf /root/.cache/pip \
     && groupadd --gid "${APP_GID}" app \

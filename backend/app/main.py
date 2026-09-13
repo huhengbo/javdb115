@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse, Response
 
 from app.adapters.javdb_api import client_from_token
-from app.api import auth, checks, follows, health, image_proxy, javdb_proxy, settings, tasks
+from app.api import auth, checks, follows, health, image_proxy, javdb_proxy, settings, tasks, tools
 from app.config import load_config
 from app.database import Database
 from app.errors import AppError, app_error_handler
@@ -185,6 +185,7 @@ app.include_router(image_proxy.router)
 app.include_router(settings.router)
 app.include_router(tasks.router)
 app.include_router(checks.router)
+app.include_router(tools.router)
 
 STATIC_DIR = Path(__file__).with_name("static")
 ROOT_STATIC_FILES = frozenset(

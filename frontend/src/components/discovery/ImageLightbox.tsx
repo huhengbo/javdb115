@@ -47,9 +47,6 @@ export function ImageLightbox({ images, index, onClose, onChange }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const gestureRef = useRef<GestureState | null>(null);
   const settleTimerRef = useRef<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const [animating, setAnimating] = useState(false);
 
@@ -63,9 +60,6 @@ export function ImageLightbox({ images, index, onClose, onChange }: Props) {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    setFailed(false);
-    setRetryKey(0);
     setAnimating(false);
     setDragOffset(0);
     gestureRef.current = null;
@@ -223,16 +217,11 @@ export function ImageLightbox({ images, index, onClose, onChange }: Props) {
             animating={animating}
           />
           <CurrentSlide
-            failed={failed}
+            key={`${index}-${image.large_url || image.thumb_url}`}
             image={image}
             index={index}
-            loading={loading}
             offset={dragOffset}
             animating={animating}
-            retryKey={retryKey}
-            onError={() => { setLoading(false); setFailed(true); }}
-            onLoad={() => setLoading(false)}
-            onRetry={() => { setFailed(false); setLoading(true); setRetryKey((value) => value + 1); }}
           />
           <PreviewSlide
             image={images[index + 1]}
@@ -251,33 +240,52 @@ export function ImageLightbox({ images, index, onClose, onChange }: Props) {
 function CurrentSlide(props: {
   readonly image: PreviewImage;
   readonly index: number;
-  readonly loading: boolean;
-  readonly failed: boolean;
-  readonly retryKey: number;
   readonly offset: number;
   readonly animating: boolean;
-  readonly onError: () => void;
-  readonly onLoad: () => void;
-  readonly onRetry: () => void;
 }) {
+  const source = imgUrl(props.image.large_url || props.image.thumb_url);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+
+  useEffect(() => {
+    const node = imageRef.current;
+    if (!node?.complete) return;
+    if (node.naturalWidth > 0) {
+      setFailed(false);
+      setLoading(false);
+      return;
+    }
+    setFailed(true);
+    setLoading(false);
+  }, [retryKey, source]);
+
+  function retry() {
+    setFailed(false);
+    setLoading(true);
+    setRetryKey((value) => value + 1);
+  }
+
   return (
     <div className={slideClass(props.animating)} style={{ transform: `translate3d(${props.offset}px, 0, 0)` }}>
-      {props.loading && !props.failed ? <span className="absolute flex items-center gap-2 text-sm text-white/75" aria-live="polite"><Loader2 className="animate-spin" size={20} />大图加载中...</span> : null}
-      {props.failed ? (
+      {loading && !failed ? <span className="absolute flex items-center gap-2 text-sm text-white/75" aria-live="polite"><Loader2 className="animate-spin" size={20} />大图加载中...</span> : null}
+      {failed ? (
         <div className="flex max-w-xs flex-col items-center gap-3 rounded-lg bg-white/10 p-5 text-center text-sm">
           <span>预览图加载失败</span>
-          <button className="flex min-h-11 items-center gap-2 rounded-md bg-white/10 px-4" onClick={props.onRetry} type="button"><RotateCcw size={16} />重试</button>
+          <button className="flex min-h-11 items-center gap-2 rounded-md bg-white/10 px-4" onClick={retry} type="button"><RotateCcw size={16} />重试</button>
         </div>
       ) : (
         <img
+          ref={imageRef}
           alt={`作品预览图 ${props.index + 1}`}
-          className={`pointer-events-none max-h-full max-w-full select-none rounded object-contain ${props.loading ? 'opacity-0' : 'opacity-100'}`}
+          className={`pointer-events-none max-h-full max-w-full select-none rounded object-contain ${loading ? 'opacity-0' : 'opacity-100'}`}
           decoding="async"
           draggable={false}
-          key={`${props.index}-${props.retryKey}`}
-          src={imgUrl(props.image.large_url || props.image.thumb_url)}
-          onError={props.onError}
-          onLoad={props.onLoad}
+          key={retryKey}
+          src={source}
+          onError={() => { setLoading(false); setFailed(true); }}
+          onLoad={() => { setFailed(false); setLoading(false); }}
         />
       )}
     </div>

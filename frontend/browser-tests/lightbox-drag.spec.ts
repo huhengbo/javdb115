@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/**', async (route) => handleApi(route));
 });
 
-test('lightbox tracks horizontal pointer drag and settles to the next image', async ({ page }) => {
+test('lightbox tracks horizontal pointer drag and settles to cached adjacent images without a stuck loader', async ({ page }) => {
   await page.goto('/discovery');
   await page.getByText('DRAG-001', { exact: true }).click();
   await page.getByRole('button', { name: '查看预览图 1/3' }).click();
@@ -33,6 +33,9 @@ test('lightbox tracks horizontal pointer drag and settles to the next image', as
   await expect(dialog).toBeVisible();
   const currentImage = page.getByAltText('作品预览图 1');
   await expect(currentImage).toBeVisible();
+  await expect(currentImage).toHaveClass(/opacity-100/);
+  await page.waitForTimeout(120);
+
   const slide = currentImage.locator('..');
   const box = await slide.boundingBox();
   expect(box).toBeTruthy();
@@ -47,7 +50,14 @@ test('lightbox tracks horizontal pointer drag and settles to the next image', as
   await page.mouse.up();
 
   await expect(page.getByRole('dialog', { name: '预览图 2/3' })).toBeVisible();
-  await expect(page.getByAltText('作品预览图 2')).toBeVisible();
+  const secondImage = page.getByAltText('作品预览图 2');
+  await expect(secondImage).toHaveClass(/opacity-100/);
+  await expect(page.getByText('大图加载中...')).toHaveCount(0);
+
+  await page.getByRole('button', { name: '上一张预览图' }).click();
+  await expect(page.getByRole('dialog', { name: '预览图 1/3' })).toBeVisible();
+  await expect(page.getByAltText('作品预览图 1')).toHaveClass(/opacity-100/);
+  await expect(page.getByText('大图加载中...')).toHaveCount(0);
 });
 
 test('short slow drag returns to the current image and desktop buttons still work', async ({ page }) => {
@@ -74,6 +84,8 @@ test('short slow drag returns to the current image and desktop buttons still wor
   await expect(page.getByRole('dialog', { name: '预览图 1/3' })).toBeVisible();
   await page.getByRole('button', { name: '下一张预览图' }).click();
   await expect(page.getByRole('dialog', { name: '预览图 2/3' })).toBeVisible();
+  await expect(page.getByAltText('作品预览图 2')).toHaveClass(/opacity-100/);
+  await expect(page.getByText('大图加载中...')).toHaveCount(0);
 });
 
 async function handleApi(route: Route) {

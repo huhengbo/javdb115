@@ -29,15 +29,18 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/**', async (route) => handleApi(route));
 });
 
-test('task cover and code open movie detail while global navigation remains visible', async ({ page }) => {
+test('task cover and code open movie detail while global navigation and quick tools remain visible', async ({ page }) => {
   await page.goto('/tasks');
   await expect(page.getByText('ABC-123', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'ABC-123', exact: true }).click();
   await expect(page.getByText('作品详情 · ABC-123')).toBeVisible();
   const navigation = page.getByRole('navigation', { name: '主导航' });
+  const quickTools = page.getByRole('button', { name: '快捷工具' });
   await expect(navigation).toBeVisible();
   await expect(navigation).toHaveCSS('z-index', '80');
+  await expect(quickTools).toBeVisible();
+  await expect(quickTools).toHaveCSS('z-index', '85');
 
   await page.getByRole('button', { name: '返回' }).click();
   await expect(page.getByText('作品详情 · ABC-123')).toHaveCount(0);
@@ -45,6 +48,7 @@ test('task cover and code open movie detail while global navigation remains visi
   await page.getByRole('button', { name: '查看作品 ABC-123' }).click();
   await expect(page.getByText('作品详情 · ABC-123')).toBeVisible();
   await expect(navigation).toBeVisible();
+  await expect(quickTools).toBeVisible();
 });
 
 async function handleApi(route: Route) {
