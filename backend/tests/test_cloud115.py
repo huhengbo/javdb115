@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -38,14 +39,22 @@ class FakeP115Client:
             },
         }
 
-    def upload_file(self, content: bytes, parent_id: str, *, filename: str) -> dict[str, Any]:
-        self.uploaded = (content, parent_id, filename)
+    def upload_file(self, path: str, parent_id: str, *, filename: str) -> dict[str, Any]:
+        self.uploaded = (Path(path).read_bytes(), parent_id, filename)
         return {"state": True, "file_id": "uploaded"}
 
 
 class InvalidP115Client(FakeP115Client):
     def user_info(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {"state": False, "error": "cookie expired"}
+
+
+class FailingUploadP115Client(FakeP115Client):
+    def upload_file(self, path: str, parent_id: str, *, filename: str) -> dict[str, Any]:
+        raise RuntimeError(
+            "{'filename': 'movie.nfo', 'filesize': -1, "
+            "'user_key': 'secret-user-key', 'upload_id': ''}"
+        )
 
 
 class OfflineP115Client(FakeP115Client):
@@ -117,6 +126,11 @@ class InvalidCloudClient(P115CloudClient):
         return InvalidP115Client()
 
 
+class FailingUploadCloudClient(P115CloudClient):
+    def _new_client(self, _: str) -> FailingUploadP115Client:
+        return FailingUploadP115Client()
+
+
 class OfflineCloudClient(P115CloudClient):
     def _new_client(self, _: str) -> OfflineP115Client:
         return OfflineP115Client()
@@ -173,7 +187,7 @@ def test_add_offline_url_reuses_existing_task_hash() -> None:
     assert task_id == "dup-hash"
 
 
-def test_upload_bytes_uses_115_upload_file() -> None:
+def test_upload_bytes_uses_temporary_file_for_115_upload() -> None:
     client = FakeCloudClient("cookie")
 
     client.upload_bytes("parent-dir", "movie.nfo", b"metadata")
@@ -183,6 +197,16 @@ def test_upload_bytes_uses_115_upload_file() -> None:
     assert content == b"metadata"
     assert parent_id == "parent-dir"
     assert filename == "movie.nfo"
+
+
+def test_upload_bytes_hides_sensitive_sdk_error_details() -> None:
+    client = FailingUploadCloudClient("cookie")
+
+    with pytest.raises(IntegrationError) as error:
+        client.upload_bytes("parent-dir", "movie.nfo", b"metadata")
+
+    assert str(error.value) == "115 metadata upload failed: movie.nfo"
+    assert "secret-user-key" not in str(error.value)
 
 
 def test_list_directories_reads_all_pages() -> None:
