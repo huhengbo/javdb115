@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 from app.adapters.cloud115_types import (
@@ -155,7 +156,13 @@ class P115CloudClient(Cloud115Client):
         self._call("fs_delete", payload)
 
     def upload_bytes(self, parent_id: str, filename: str, content: bytes) -> None:
-        result = self.client.upload_file(content, parent_id, filename=filename)
+        try:
+            with NamedTemporaryFile() as file:
+                file.write(content)
+                file.flush()
+                result = self.client.upload_file(file.name, parent_id, filename=filename)
+        except Exception as exc:
+            raise IntegrationError(f"115 metadata upload failed: {filename}") from exc
         self._raise_if_response_failed("upload_file", result)
 
     def _iter_offline_items(self, remote_stat: int) -> Iterator[dict[str, Any]]:
