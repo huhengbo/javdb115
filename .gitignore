@@ -25,3 +25,7 @@ dist/
 frontend/dist/
 frontend/*.tsbuildinfo
 backend/.coverage
+
+# Local browser test artifacts
+frontend/test-results/
+frontend/playwright-report/

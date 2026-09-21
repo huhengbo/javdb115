@@ -235,7 +235,7 @@ function ActorRankingItem(props: { readonly actor: RankingActor; readonly rank: 
   return (
     <button className="min-w-0 text-center" onClick={props.onOpen} type="button">
       <span className="relative mx-auto block w-fit"><span className="absolute -left-1 -top-1 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-slate-900/85 px-1 text-[11px] font-semibold text-white">{props.rank}</span>{props.actor.avatar_url ? <img alt={name} className="h-20 w-20 rounded-full object-cover" decoding="async" loading="lazy" src={imgUrl(props.actor.avatar_url)} /> : <span className="block h-20 w-20 rounded-full bg-slate-100" />}</span>
-      <span className="mt-2 block truncate text-sm font-semibold text-ink">{name}</span><span className="block truncate text-xs text-slate-500">{props.actor.name}</span>
+      <span className="mt-2 block truncate text-sm font-semibold text-ink">{name}</span>{props.actor.name !== name ? <span className="block truncate text-xs text-slate-500">{props.actor.name}</span> : null}
     </button>
   );
 }

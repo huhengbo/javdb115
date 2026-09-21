@@ -16,6 +16,18 @@ def main() -> None:
         "version"
     ]
     versions = {"VERSION": expected, "backend": str(backend), "frontend": str(frontend)}
+    with (ROOT / "backend" / "uv.lock").open("rb") as stream:
+        backend_lock = tomllib.load(stream)
+    versions["backend lock"] = next(
+        str(package["version"])
+        for package in backend_lock["package"]
+        if package["name"] == "javdb115-backend"
+    )
+    frontend_lock = json.loads(
+        (ROOT / "frontend" / "package-lock.json").read_text(encoding="utf-8")
+    )
+    versions["frontend lock"] = str(frontend_lock["version"])
+    versions["frontend lock package"] = str(frontend_lock["packages"][""]["version"])
     mismatched = {name: value for name, value in versions.items() if value != expected}
     if mismatched:
         details = ", ".join(f"{name}={value}" for name, value in versions.items())

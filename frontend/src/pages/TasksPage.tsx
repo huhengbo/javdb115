@@ -42,6 +42,7 @@ export function TasksPage() {
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshPending, setRefreshPending] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filterSheet, setFilterSheet] = useState<'progress' | 'more' | null>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -51,7 +52,11 @@ export function TasksPage() {
   const loadMoreInFlight = useRef(false);
 
   const refresh = useCallback(async (initial = false, replace = false) => {
-    if (!initial && (refreshInFlight.current || loadMoreInFlight.current)) return;
+    if (!initial && (refreshInFlight.current || loadMoreInFlight.current)) {
+      // A deletion must refresh counts after an older request finishes.
+      if (replace) setRefreshPending(true);
+      return;
+    }
     refreshInFlight.current = true;
     if (initial) setInitialLoading(true);
     else setRefreshing(true);
@@ -133,6 +138,12 @@ export function TasksPage() {
     return () => observer.disconnect();
   }, [hasMore, initialLoading, loadMore, loadMoreError, loadingMore, refreshing]);
 
+  useEffect(() => {
+    if (!refreshPending || initialLoading || refreshing || loadingMore) return;
+    setRefreshPending(false);
+    void refresh(false, true);
+  }, [initialLoading, loadingMore, refresh, refreshPending, refreshing]);
+
   const activeLabel = useMemo(() => TASK_FILTERS.find((item) => item.value === activeFilter)?.label ?? '全部', [activeFilter]);
   const progressCount = filterCounts.submitted + filterCounts.downloading + filterCounts.organizing;
 
@@ -146,7 +157,7 @@ export function TasksPage() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm text-slate-500">{activeLabel} · {total} 条</p>
-          <p className="mt-0.5 text-xs text-slate-400">每分钟自动刷新 · {formatDateTime(lastRefreshedAt)}</p>
+          <p className="mt-0.5 text-xs text-slate-400">{formatDateTime(lastRefreshedAt)}</p>
         </div>
         <button aria-label="刷新任务列表" className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-50" disabled={refreshing} onClick={() => void refresh(false, true)} type="button"><RefreshCw className={refreshing ? 'animate-spin' : ''} size={18} /></button>
       </div>

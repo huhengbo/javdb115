@@ -35,6 +35,10 @@ export function ActorDetailSheet(props: Props) {
   const [sortType, setSortType] = useState(0);
   const [activeTagIds, setActiveTagIds] = useState<string[]>(props.follow?.selected_tag_ids ?? []);
   const [showFollowDialog, setShowFollowDialog] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const loaderRef = useRef<HTMLDivElement>(null);
+  const moviesRef = useRef<Movie[]>([]);
+  const moviesInFlight = useRef(false);
   const movieSeq = useRef(0);
   const detailSeq = useRef(0);
   const followTagKey = props.follow?.selected_tag_ids.join('|') ?? '';
@@ -49,24 +53,39 @@ export function ActorDetailSheet(props: Props) {
 
   const loadMovies = useCallback(
     async (nextPage: number, append: boolean) => {
+      // A ref closes the gap before React commits the loading state.
+      if (append && moviesInFlight.current) return;
       const seq = ++movieSeq.current;
+      moviesInFlight.current = true;
       if (append) setLoadingMore(true);
-      else setLoading(true);
+      else {
+        moviesRef.current = [];
+        setMovies([]);
+        setPage(1);
+        setHasMore(true);
+        setLoadingMore(false);
+        setLoading(true);
+      }
       setError(null);
       try {
         const result = await client.actorMovies(props.actor.id, activeTagIds, sortType, nextPage, PAGE_SIZE);
         if (seq !== movieSeq.current) return;
-        setMovies((current) => append ? mergeMovies(current, result) : result);
-        setHasMore(result.length === PAGE_SIZE);
+        const current = append ? moviesRef.current : [];
+        const merged = mergeMovies(current, result);
+        // Stop if the upstream repeats a whole page instead of making progress.
+        setHasMore(result.length >= PAGE_SIZE && (!append || merged.length > current.length));
+        moviesRef.current = merged;
+        setMovies(merged);
         setPage(nextPage);
         setFailedPage(null);
       } catch (err) {
         if (seq === movieSeq.current) {
           setError((err as Error).message);
-          if (append) setFailedPage(nextPage);
+          setFailedPage(nextPage);
         }
       } finally {
         if (seq === movieSeq.current) {
+          moviesInFlight.current = false;
           setLoading(false);
           setLoadingMore(false);
         }
@@ -85,21 +104,42 @@ export function ActorDetailSheet(props: Props) {
       .catch((err: Error) => {
         if (seq === detailSeq.current) setError(err.message);
       });
+    return () => { detailSeq.current = seq + 1; };
   }, [props.actor.id]);
 
   useEffect(() => {
     setActiveTagIds(props.follow?.selected_tag_ids ?? []);
   }, [props.actor.id, followTagKey, props.follow?.selected_tag_ids]);
 
+  const cancelMovies = useCallback(() => {
+    movieSeq.current++;
+    moviesInFlight.current = false;
+  }, []);
+
   useEffect(() => {
     setFailedPage(null);
+    scrollRef.current?.scrollTo({ top: 0 });
     void loadMovies(1, false);
-  }, [loadMovies]);
+    return cancelMovies;
+  }, [cancelMovies, loadMovies]);
+
+  useEffect(() => {
+    const root = scrollRef.current;
+    const target = loaderRef.current;
+    if (!root || !target || props.isTop === false || showFollowDialog || loading || loadingMore || failedPage || !hasMore) return;
+    if (typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void loadMovies(page + 1, true);
+    }, { root, rootMargin: '320px 0px', threshold: 0.01 });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [failedPage, hasMore, loading, loadingMore, loadMovies, page, props.isTop, showFollowDialog]);
 
   return (
     <>
       <div
         aria-hidden={props.isTop === false}
+        ref={scrollRef}
         className={`fixed inset-0 ${props.isTop === false ? 'pointer-events-none z-[60]' : 'pointer-events-auto z-[70]'} overflow-y-auto overscroll-contain bg-white`}
         inert={props.isTop === false}
       >
@@ -114,24 +154,30 @@ export function ActorDetailSheet(props: Props) {
           </header>
           <div className="p-4 pb-[calc(5rem+env(safe-area-inset-bottom))]">
             <ActorHeader actor={currentActor} detail={detail} follow={props.follow} onFollow={() => setShowFollowDialog(true)} />
-            <ControlTitle title="筛选标签" caption="标签会直接参与演员作品搜索" />
+            <ControlTitle title="筛选标签" />
             <FilterBar activeTagIds={activeTagIds} onChange={setActiveTagIds} />
-            <ControlTitle title="排序" caption="按 App 接口返回顺序刷新作品列表" />
+            <ControlTitle title="排序" />
             <SortBar sortType={sortType} onChange={setSortType} />
             {error ? <p className="mt-3 rounded-md bg-red-50 p-3 text-sm text-danger" role="alert">{error}</p> : null}
             {loading ? <LoadingBlock /> : null}
-            {!loading ? <MovieGrid movies={movies} actor={currentActor} onOpenMovie={props.onOpenMovie} /> : null}
+            {!loading && failedPage !== 1 ? <MovieGrid movies={movies} actor={currentActor} onOpenMovie={props.onOpenMovie} /> : null}
             {!loading && (hasMore || failedPage) ? (
-              <button
-                className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-line px-3 text-sm text-slate-600 disabled:opacity-60"
-                disabled={loadingMore}
-                onClick={() => void loadMovies(failedPage ?? page + 1, true)}
-                type="button"
-              >
-                {loadingMore ? <Loader2 className="animate-spin" size={16} /> : null}
-                {loadingMore ? '加载中...' : failedPage ? `重试加载第 ${failedPage} 页` : '加载更多'}
-              </button>
+              <div ref={loaderRef}>
+                <button
+                  className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-line px-3 text-sm text-slate-600 disabled:opacity-60"
+                  disabled={loadingMore}
+                  onClick={() => {
+                    const nextPage = failedPage ?? page + 1;
+                    void loadMovies(nextPage, nextPage > 1);
+                  }}
+                  type="button"
+                >
+                  {loadingMore ? <Loader2 className="animate-spin" size={16} /> : null}
+                  {loadingMore ? '加载中...' : failedPage ? `重试加载第 ${failedPage} 页` : '加载更多'}
+                </button>
+              </div>
             ) : null}
+            {!loading && !hasMore && !failedPage && movies.length > 0 ? <p className="mt-4 text-center text-xs text-slate-400" role="status">已加载全部</p> : null}
           </div>
         </div>
       </div>
@@ -147,13 +193,8 @@ export function ActorDetailSheet(props: Props) {
   );
 }
 
-function ControlTitle({ caption, title }: { readonly caption: string; readonly title: string }) {
-  return (
-    <div className="mt-4">
-      <p className="text-sm font-medium text-ink">{title}</p>
-      <p className="mt-1 text-xs text-slate-500">{caption}</p>
-    </div>
-  );
+function ControlTitle({ title }: { readonly title: string }) {
+  return <h3 className="mt-4 text-sm font-medium text-ink">{title}</h3>;
 }
 
 function ActorHeader(props: {
@@ -173,7 +214,7 @@ function ActorHeader(props: {
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold text-ink">{props.actor.name}</h2>
           <p className="mt-1 text-sm text-slate-500">出演 {props.detail?.videos_count ?? 0} 部影片</p>
-          <p className="mt-1 text-xs text-slate-500">{detailLine(props.detail)}</p>
+          {detailLine(props.detail) ? <p className="mt-1 text-xs text-slate-500">{detailLine(props.detail)}</p> : null}
         </div>
         <button className="flex min-h-11 shrink-0 items-center gap-1 rounded-full bg-brand px-3 text-sm text-white active:opacity-85" onClick={props.onFollow} type="button">
           <Plus size={16} />
@@ -241,12 +282,16 @@ function LoadingBlock() {
 }
 
 function detailLine(detail: ActorDetail | null): string {
-  if (!detail) return '演员资料加载中';
+  if (!detail) return '';
   const segments = [detail.birthday, detail.cup, detail.height ? `${detail.height}cm` : ''].filter(Boolean);
-  return segments.join(' · ') || '暂无更多资料';
+  return segments.join(' · ');
 }
 
 function mergeMovies(current: Movie[], incoming: Movie[]): Movie[] {
   const seen = new Set(current.map((movie) => movie.id));
-  return [...current, ...incoming.filter((movie) => !seen.has(movie.id))];
+  return [...current, ...incoming.filter((movie) => {
+    if (seen.has(movie.id)) return false;
+    seen.add(movie.id);
+    return true;
+  })];
 }
