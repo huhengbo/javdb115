@@ -1,5 +1,5 @@
-import { AlertTriangle, ChevronDown, Loader2, Trash2 } from 'lucide-react';
-import { useState, type MouseEvent } from 'react';
+import { AlertTriangle, ChevronDown, Loader2, MoreHorizontal, Trash2 } from 'lucide-react';
+import { useRef, useState, type MouseEvent } from 'react';
 import { client } from '../api';
 import { movieIdFromSourceUrl } from '../lib/javdb';
 import {
@@ -18,6 +18,8 @@ import { useMovieNavigation } from './discovery/MovieDetailNavigator';
 import { MoviePoster } from './MoviePoster';
 import { StatusPill } from './StatusPill';
 import { EmptyState } from './ui';
+import { TaskActionSheet } from './TaskActionSheet';
+import { TaskCard } from './TaskCard';
 
 type Props = {
   tasks: Task[];
@@ -26,11 +28,18 @@ type Props = {
 };
 
 export function TaskList({ tasks, onChanged, compact = false }: Props) {
-  const deletion = useTaskDeletion(onChanged);
+  const [deletedIds, setDeletedIds] = useState<Set<number>>(new Set());
+  const [actionTask, setActionTask] = useState<Task | null>(null);
+  const deletion = useTaskDeletion((task) => {
+    // Keep stale refresh/pagination responses from resurrecting deleted cards.
+    setDeletedIds((current) => new Set([...current, task.id]));
+    onChanged?.();
+  });
+  const visibleTasks = tasks.filter((task) => !deletedIds.has(task.id));
   const navigation = useMovieNavigation();
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
-  if (tasks.length === 0) return <EmptyState title="暂无任务" />;
+  if (visibleTasks.length === 0) return <EmptyState title="暂无任务" />;
 
   function toggleExpanded(id: number) {
     if (compact) return;
@@ -44,49 +53,53 @@ export function TaskList({ tasks, onChanged, compact = false }: Props) {
   return (
     <>
       <div className="quiet-list">
-        {tasks.map((task) => {
+        {visibleTasks.map((task) => {
           const expanded = expandedIds.has(task.id);
           const failed = taskIssueKind(task) !== 'none' || task.status === 'failed';
           return (
-            <article key={task.id} className={`quiet-list-item ${compact ? '' : 'cursor-pointer'}`} onClick={() => toggleExpanded(task.id)}>
-              <div className="py-3">
-                <TaskHeader compact={compact} expanded={expanded} task={task} onOpenMovie={navigation.openMovie} />
+            <TaskCard key={task.id} label={`任务 ${task.work?.code ?? task.id}`} className={compact ? '' : 'cursor-pointer'} onClick={() => toggleExpanded(task.id)} onActions={() => setActionTask(task)}>
+              <div className="select-none py-3 [-webkit-touch-callout:none]">
+                <TaskHeader compact={compact} expanded={expanded} task={task} onOpenMovie={navigation.openMovie} onActions={() => setActionTask(task)} />
                 {!compact && task.status !== 'completed' ? <TaskProgress task={task} /> : null}
                 {failed ? <div className="mt-3"><TaskIssueBlock task={task} compact={!expanded} /></div> : null}
                 {!compact && task.status === 'failed' && !expanded ? <RetryButton taskId={task.id} onChanged={onChanged} /> : null}
               </div>
               {!compact && expanded ? (
-                <div className="border-t border-line pb-4 pt-3">
+                <div className="border-t border-line pb-4 pt-3" data-no-long-press>
                   <TaskDetails task={task} />
                   {task.status === 'failed' ? <RetryButton taskId={task.id} onChanged={onChanged} /> : null}
                   <DeleteButton task={task} onClick={() => deletion.open(task)} />
                 </div>
               ) : null}
-            </article>
+            </TaskCard>
           );
         })}
       </div>
+      {actionTask ? <TaskActionSheet task={actionTask} onClose={() => setActionTask(null)} onDelete={() => { setActionTask(null); deletion.open(actionTask); }} /> : null}
       {deletion.task ? <ConfirmDialog danger busy={deletion.busy} confirmLabel="删除" description={<DeleteDescription error={deletion.error} task={deletion.task} />} title="删除任务记录" onCancel={deletion.close} onConfirm={deletion.confirm} /> : null}
     </>
   );
 }
 
-function useTaskDeletion(onChanged?: () => void) {
+function useTaskDeletion(onDeleted: (task: Task) => void) {
   const [task, setTask] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   async function confirm() {
-    if (!task || busy) return;
+    if (!task || inFlight.current) return;
+    inFlight.current = true;
     setError(null);
     setBusy(true);
     try {
       await client.deleteTask(task.id);
       setTask(null);
-      onChanged?.();
+      onDeleted(task);
     } catch (err) {
       setError((err as Error).message);
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
@@ -103,7 +116,7 @@ function useTaskDeletion(onChanged?: () => void) {
   return { busy, close, confirm, error, open, task };
 }
 
-function TaskHeader(props: { readonly compact: boolean; readonly expanded: boolean; readonly task: Task; readonly onOpenMovie: (movieId: string) => void }) {
+function TaskHeader(props: { readonly compact: boolean; readonly expanded: boolean; readonly task: Task; readonly onOpenMovie: (movieId: string) => void; readonly onActions: () => void }) {
   const movieId = movieIdFromSourceUrl(props.task.work?.source_url);
   const code = props.task.work?.code ?? `任务 #${props.task.id}`;
   const poster = <MoviePoster alt={code} className={`${props.compact ? 'h-16 w-11' : 'h-[4.5rem] w-[3.15rem]'} shrink-0 rounded-md`} src={props.task.work?.cover_url} />;
@@ -127,6 +140,7 @@ function TaskHeader(props: { readonly compact: boolean; readonly expanded: boole
           {!props.compact ? <ChevronDown className={`shrink-0 transition-transform ${props.expanded ? 'rotate-180' : ''}`} size={15} /> : null}
         </div>
       </div>
+      <button aria-label={`更多操作 ${code}`} aria-haspopup="dialog" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100" onClick={(event) => { event.stopPropagation(); props.onActions(); }} type="button"><MoreHorizontal size={18} /></button>
     </div>
   );
 }
@@ -177,7 +191,7 @@ function DeleteButton({ task, onClick }: { readonly task: Task; readonly onClick
 }
 
 function DeleteDescription({ error, task }: { readonly error: string | null; readonly task: Task }) {
-  return <div className="space-y-2"><p>确认删除 {task.work?.code ?? `任务 #${task.id}`} 的本地任务记录？</p><p className="text-xs text-slate-500">不会取消 115 离线任务，也不会删除网盘文件。</p>{error ? <p className="rounded-md bg-red-50 p-2 text-xs text-danger" role="alert">{error}</p> : null}</div>;
+  return <div className="space-y-2"><p>确认删除 {task.work?.code ?? `任务 #${task.id}`} 的本地任务记录？</p><p className="text-xs text-slate-500">不会取消 115 离线任务，也不会删除网盘文件。</p>{['pending', 'submitted', 'downloading', 'organizing'].includes(task.status) ? <p className="text-xs text-amber-700">删除后不再跟踪此任务，已开始的下载或整理不会撤销。</p> : null}{error ? <p className="rounded-md bg-red-50 p-2 text-xs text-danger" role="alert">{error}</p> : null}</div>;
 }
 
 function RetryButton({ taskId, onChanged }: { readonly taskId: number; readonly onChanged?: () => void }) {

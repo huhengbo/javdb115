@@ -15,7 +15,6 @@ export function MagnetList({ magnets, onSelect }: Props) {
   const [feedback, setFeedback] = useState<string | null>(null);
   if (magnets.length === 0) return null;
   const visible = expanded ? magnets : magnets.slice(0, INITIAL_VISIBLE);
-  const hiddenCount = magnets.length - visible.length;
 
   async function copyMagnet(magnet: MagnetItem) {
     try {
@@ -40,7 +39,6 @@ export function MagnetList({ magnets, onSelect }: Props) {
           <MagnetCard isBest={index === 0} key={magnet.hash} magnet={magnet} onCopy={copyMagnet} onSelect={onSelect} />
         ))}
       </div>
-      {!expanded && hiddenCount > 0 ? <p className="mt-2 text-center text-xs text-slate-400">还有 {hiddenCount} 条候选磁力</p> : null}
     </section>
   );
 }
