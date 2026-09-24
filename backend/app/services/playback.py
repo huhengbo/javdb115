@@ -33,6 +33,7 @@ class PlaybackSession:
     files: list[CloudItem] = field(default_factory=list)
     selected_file_id: str | None = None
     play_url: str | None = None
+    progress_percent: int = 5
 
 
 _SESSIONS: dict[str, PlaybackSession] = {}
@@ -73,32 +74,31 @@ class PlaybackService:
             return self._payload(session)
 
         task = self.cloud.get_offline_tasks({session.task_id}).get(session.task_id.casefold())
+        if task is not None and task.progress_percent is not None:
+            session.progress_percent = max(5, min(85, task.progress_percent))
         if task is not None and task.status == "failed":
             session.status = "failed"
             session.message = task.message or "115 离线任务失败"
             return self._payload(session)
 
-        source_dir_id = task.source_dir_id if task is not None else None
-        source_dir_id = source_dir_id or session.session_dir_id
-        if source_dir_id is None:
+        session.source_dir_id = task.source_dir_id if task is not None else None
+        videos = self._video_files(session.session_dir_id)
+        if not videos:
             session.status = "offline_waiting"
             progress = task.progress_percent if task is not None else None
             session.message = (
-                f"等待 115 离线文件 · {progress}%"
+                f"115 离线中 · {progress}%"
                 if progress is not None
-                else "等待 115 离线文件"
+                else "已提交到 115，等待离线任务开始"
             )
-            return self._payload(session)
-
-        session.source_dir_id = source_dir_id
-        session.status = "locating"
-        session.message = "已发现离线目录，正在查找视频"
-        videos = self._video_files(source_dir_id)
-        if not videos:
             if task is not None and task.status == "completed":
                 session.status = "failed"
                 session.message = "115 离线已完成，但没有找到可播放的视频文件"
             return self._payload(session)
+
+        session.status = "locating"
+        session.progress_percent = 88
+        session.message = "离线文件已就绪，正在查找主视频"
 
         session.files = self._playable_candidates(videos)
         if not session.files:
@@ -126,10 +126,12 @@ class PlaybackService:
 
     def _resolve(self, session: PlaybackSession, item: CloudItem) -> dict[str, object]:
         session.status = "resolving"
+        session.progress_percent = 96
         session.message = "正在获取 115 播放地址"
         session.selected_file_id = item.id
         session.play_url = self.cloud.get_download_url(item.id, item.pick_code)
         session.status = "ready"
+        session.progress_percent = 100
         session.message = "播放地址已准备完成"
         return self._payload(session)
 
@@ -190,13 +192,12 @@ class PlaybackService:
         self._delete_session_directory(session)
 
     def _delete_session_directory(self, session: PlaybackSession) -> None:
-        source_dir_id = session.source_dir_id or session.session_dir_id
         owned_ids = {
             directory.id
             for directory in self.cloud.list_directories(session.play_root_id)
         }
-        if source_dir_id in owned_ids:
-            self.cloud.delete([source_dir_id])
+        if session.session_dir_id in owned_ids:
+            self.cloud.delete([session.session_dir_id])
 
     def _payload(self, session: PlaybackSession) -> dict[str, object]:
         selected = next(
@@ -222,21 +223,11 @@ class PlaybackService:
             "size": item.size_bytes,
         }
 
-
     def _progress_percent(self, session: PlaybackSession) -> int:
         if session.status == "offline_waiting":
-            task = self.cloud.get_offline_tasks({session.task_id}).get(session.task_id.casefold())
-            if task is not None and task.progress_percent is not None:
-                return max(5, min(85, task.progress_percent))
-            return 12
-        if session.status == "locating":
-            return 88
+            return max(8, session.progress_percent)
         if session.status == "select_required":
             return 92
-        if session.status == "resolving":
-            return 96
-        if session.status == "ready":
-            return 100
         if session.status == "failed":
             return 100
-        return 5
+        return session.progress_percent
