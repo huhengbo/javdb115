@@ -1,16 +1,17 @@
-import { Copy, Download, ExternalLink } from 'lucide-react';
+import { Copy, Download, ExternalLink, Play } from 'lucide-react';
 import { useState } from 'react';
 import type { MagnetItem } from '../../types';
 import { formatMagnetSize } from '../../lib/javdb';
 
 type Props = {
   readonly magnets: MagnetItem[];
+  readonly onPlay: (magnet: MagnetItem) => void;
   readonly onSelect: (magnet: MagnetItem) => void;
 };
 
 const INITIAL_VISIBLE = 3;
 
-export function MagnetList({ magnets, onSelect }: Props) {
+export function MagnetList({ magnets, onPlay, onSelect }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   if (magnets.length === 0) return null;
@@ -36,7 +37,7 @@ export function MagnetList({ magnets, onSelect }: Props) {
       {feedback ? <p className="mt-2 rounded-md bg-slate-50 p-2 text-xs text-slate-600" role="status">{feedback}</p> : null}
       <div className="mt-2 space-y-2">
         {visible.map((magnet, index) => (
-          <MagnetCard isBest={index === 0} key={magnet.hash} magnet={magnet} onCopy={copyMagnet} onSelect={onSelect} />
+          <MagnetCard isBest={index === 0} key={magnet.hash} magnet={magnet} onCopy={copyMagnet} onPlay={onPlay} onSelect={onSelect} />
         ))}
       </div>
     </section>
@@ -47,9 +48,10 @@ function MagnetCard(props: {
   readonly isBest: boolean;
   readonly magnet: MagnetItem;
   readonly onCopy: (magnet: MagnetItem) => void | Promise<void>;
+  readonly onPlay: Props['onPlay'];
   readonly onSelect: Props['onSelect'];
 }) {
-  const { isBest, magnet, onCopy, onSelect } = props;
+  const { isBest, magnet, onCopy, onPlay, onSelect } = props;
   return (
     <article className="rounded-lg border border-line bg-slate-50 p-3">
       {isBest ? <p className="mb-1 text-xs font-medium text-brand">推荐磁力</p> : null}
@@ -60,8 +62,9 @@ function MagnetCard(props: {
         {magnet.hd ? <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">高清</span> : null}
         {magnet.created_at ? <span className="px-1 py-1">{magnet.created_at}</span> : null}
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <button className="flex min-h-11 items-center justify-center gap-1 rounded-md bg-brand px-2 text-xs font-medium text-white active:opacity-85" onClick={() => onSelect(magnet)} type="button"><Download size={15} />115 离线</button>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <button className="flex min-h-11 items-center justify-center gap-1 rounded-md bg-brand px-2 text-xs font-medium text-white active:opacity-85" onClick={() => onPlay(magnet)} type="button"><Play size={15} />在线播放</button>
+        <button className="flex min-h-11 items-center justify-center gap-1 rounded-md border border-brand/30 bg-white px-2 text-xs font-medium text-brand" onClick={() => onSelect(magnet)} type="button"><Download size={15} />115 离线</button>
         <button className="flex min-h-11 items-center justify-center gap-1 rounded-md border border-line bg-white px-2 text-xs text-slate-600" onClick={() => void onCopy(magnet)} type="button"><Copy size={14} />复制</button>
         <a className="flex min-h-11 items-center justify-center gap-1 rounded-md border border-line bg-white px-2 text-xs text-slate-600" href={magnetHref(magnet)}><ExternalLink size={14} />打开</a>
       </div>
