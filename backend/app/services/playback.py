@@ -24,6 +24,7 @@ class PlaybackSession:
     id: str
     task_id: str
     play_root_id: str
+    session_dir_id: str
     created_at: datetime
     expires_at: datetime
     status: str = "offline_waiting"
@@ -50,12 +51,14 @@ class PlaybackService:
         self._cleanup_expired()
         play_root_id = self._play_root_id()
         session_id = uuid4().hex[:16]
-        task_id = self.cloud.add_offline_url(value, play_root_id, savepath=session_id)
+        session_dir_id = self.cloud.create_directory(play_root_id, session_id)
+        task_id = self.cloud.add_offline_url(value, session_dir_id)
         now = datetime.now(UTC)
         session = PlaybackSession(
             id=session_id,
             task_id=task_id,
             play_root_id=play_root_id,
+            session_dir_id=session_dir_id,
             created_at=now,
             expires_at=now + PLAYBACK_TTL,
         )
@@ -76,7 +79,7 @@ class PlaybackService:
             return self._payload(session)
 
         source_dir_id = task.source_dir_id if task is not None else None
-        source_dir_id = source_dir_id or self._session_directory_id(session)
+        source_dir_id = source_dir_id or session.session_dir_id
         if source_dir_id is None:
             session.status = "offline_waiting"
             progress = task.progress_percent if task is not None else None
@@ -136,12 +139,6 @@ class PlaybackService:
                 return directory.id
         return self.cloud.create_directory(self.download_root_id, PLAYBACK_ROOT_NAME)
 
-    def _session_directory_id(self, session: PlaybackSession) -> str | None:
-        for directory in self.cloud.list_directories(session.play_root_id):
-            if directory.name == session.id:
-                return directory.id
-        return None
-
     def _video_files(self, directory_id: str, depth: int = 0) -> list[CloudItem]:
         videos: list[CloudItem] = []
         for item in self.cloud.list_items(directory_id):
@@ -193,9 +190,7 @@ class PlaybackService:
         self._delete_session_directory(session)
 
     def _delete_session_directory(self, session: PlaybackSession) -> None:
-        source_dir_id = session.source_dir_id or self._session_directory_id(session)
-        if source_dir_id is None:
-            return
+        source_dir_id = session.source_dir_id or session.session_dir_id
         owned_ids = {
             directory.id
             for directory in self.cloud.list_directories(session.play_root_id)
@@ -213,6 +208,7 @@ class PlaybackService:
             "task_id": session.task_id,
             "status": session.status,
             "message": session.message,
+            "progress_percent": self._progress_percent(session),
             "expires_at": session.expires_at.isoformat(),
             "files": [self._file_payload(item) for item in session.files],
             "file": self._file_payload(selected) if selected is not None else None,
@@ -225,3 +221,22 @@ class PlaybackService:
             "name": item.name,
             "size": item.size_bytes,
         }
+
+
+    def _progress_percent(self, session: PlaybackSession) -> int:
+        if session.status == "offline_waiting":
+            task = self.cloud.get_offline_tasks({session.task_id}).get(session.task_id.casefold())
+            if task is not None and task.progress_percent is not None:
+                return max(5, min(85, task.progress_percent))
+            return 12
+        if session.status == "locating":
+            return 88
+        if session.status == "select_required":
+            return 92
+        if session.status == "resolving":
+            return 96
+        if session.status == "ready":
+            return 100
+        if session.status == "failed":
+            return 100
+        return 5
