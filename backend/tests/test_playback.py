@@ -10,22 +10,22 @@ class FakeCloud:
         self.deleted: list[str] = []
         self.deleted_offline_tasks: list[str] = []
         self.created: list[tuple[str, str]] = []
+        self.offline_targets: list[tuple[str, str | None]] = []
 
     def list_directories(self, parent_id: str) -> list[CloudDirectory]:
         if parent_id == "download-root":
             return [CloudDirectory("play-root", ".play", None, True)]
         if parent_id == "play-root":
-            return [CloudDirectory("source-dir", "owned-session", None, True)]
+            return [CloudDirectory("session-dir", "owned-session", None, True)]
         return []
 
     def create_directory(self, parent_id: str, name: str) -> str:
         self.created.append((parent_id, name))
-        return "play-root"
+        return "session-dir"
 
     def add_offline_url(self, url: str, target_dir_id: str, *, savepath: str | None = None) -> str:
         assert url.startswith("magnet:")
-        assert target_dir_id == "play-root"
-        assert savepath
+        self.offline_targets.append((target_dir_id, savepath))
         return "task-hash"
 
     def get_offline_tasks(self, task_ids: set[str]) -> dict[str, CloudOfflineTask]:
@@ -43,7 +43,7 @@ class FakeCloud:
         }
 
     def list_items(self, parent_id: str) -> list[CloudItem]:
-        assert parent_id == "source-dir"
+        assert parent_id == "session-dir"
         return self.items
 
     def get_download_url(self, file_id: str, pick_code: str | None = None) -> str:
@@ -66,6 +66,8 @@ def test_playback_auto_selects_clear_main_video() -> None:
     service = PlaybackService(cloud, "download-root")
 
     created = service.create("magnet:?xt=urn:btih:test")
+    assert cloud.created and cloud.created[0][0] == "play-root"
+    assert cloud.offline_targets == [("session-dir", None)]
     result = service.get(str(created["session_id"]))
 
     assert result["status"] == "ready"
@@ -105,4 +107,4 @@ def test_cleanup_removes_offline_record_before_playback_directory() -> None:
     service._cleanup_session(session)
 
     assert cloud.deleted_offline_tasks == ["task-hash"]
-    assert cloud.deleted == ["source-dir"]
+    assert cloud.deleted == ["session-dir"]

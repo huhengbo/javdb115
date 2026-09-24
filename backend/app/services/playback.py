@@ -24,6 +24,7 @@ class PlaybackSession:
     id: str
     task_id: str
     play_root_id: str
+    session_dir_id: str
     created_at: datetime
     expires_at: datetime
     status: str = "offline_waiting"
@@ -32,6 +33,7 @@ class PlaybackSession:
     files: list[CloudItem] = field(default_factory=list)
     selected_file_id: str | None = None
     play_url: str | None = None
+    progress_percent: int = 5
 
 
 _SESSIONS: dict[str, PlaybackSession] = {}
@@ -50,12 +52,14 @@ class PlaybackService:
         self._cleanup_expired()
         play_root_id = self._play_root_id()
         session_id = uuid4().hex[:16]
-        task_id = self.cloud.add_offline_url(value, play_root_id, savepath=session_id)
+        session_dir_id = self.cloud.create_directory(play_root_id, session_id)
+        task_id = self.cloud.add_offline_url(value, session_dir_id)
         now = datetime.now(UTC)
         session = PlaybackSession(
             id=session_id,
             task_id=task_id,
             play_root_id=play_root_id,
+            session_dir_id=session_dir_id,
             created_at=now,
             expires_at=now + PLAYBACK_TTL,
         )
@@ -70,32 +74,31 @@ class PlaybackService:
             return self._payload(session)
 
         task = self.cloud.get_offline_tasks({session.task_id}).get(session.task_id.casefold())
+        if task is not None and task.progress_percent is not None:
+            session.progress_percent = max(5, min(85, task.progress_percent))
         if task is not None and task.status == "failed":
             session.status = "failed"
             session.message = task.message or "115 离线任务失败"
             return self._payload(session)
 
-        source_dir_id = task.source_dir_id if task is not None else None
-        source_dir_id = source_dir_id or self._session_directory_id(session)
-        if source_dir_id is None:
+        session.source_dir_id = task.source_dir_id if task is not None else None
+        videos = self._video_files(session.session_dir_id)
+        if not videos:
             session.status = "offline_waiting"
             progress = task.progress_percent if task is not None else None
             session.message = (
-                f"等待 115 离线文件 · {progress}%"
+                f"115 离线中 · {progress}%"
                 if progress is not None
-                else "等待 115 离线文件"
+                else "已提交到 115，等待离线任务开始"
             )
-            return self._payload(session)
-
-        session.source_dir_id = source_dir_id
-        session.status = "locating"
-        session.message = "已发现离线目录，正在查找视频"
-        videos = self._video_files(source_dir_id)
-        if not videos:
             if task is not None and task.status == "completed":
                 session.status = "failed"
                 session.message = "115 离线已完成，但没有找到可播放的视频文件"
             return self._payload(session)
+
+        session.status = "locating"
+        session.progress_percent = 88
+        session.message = "离线文件已就绪，正在查找主视频"
 
         session.files = self._playable_candidates(videos)
         if not session.files:
@@ -123,10 +126,12 @@ class PlaybackService:
 
     def _resolve(self, session: PlaybackSession, item: CloudItem) -> dict[str, object]:
         session.status = "resolving"
+        session.progress_percent = 96
         session.message = "正在获取 115 播放地址"
         session.selected_file_id = item.id
         session.play_url = self.cloud.get_download_url(item.id, item.pick_code)
         session.status = "ready"
+        session.progress_percent = 100
         session.message = "播放地址已准备完成"
         return self._payload(session)
 
@@ -135,12 +140,6 @@ class PlaybackService:
             if directory.name == PLAYBACK_ROOT_NAME:
                 return directory.id
         return self.cloud.create_directory(self.download_root_id, PLAYBACK_ROOT_NAME)
-
-    def _session_directory_id(self, session: PlaybackSession) -> str | None:
-        for directory in self.cloud.list_directories(session.play_root_id):
-            if directory.name == session.id:
-                return directory.id
-        return None
 
     def _video_files(self, directory_id: str, depth: int = 0) -> list[CloudItem]:
         videos: list[CloudItem] = []
@@ -193,15 +192,12 @@ class PlaybackService:
         self._delete_session_directory(session)
 
     def _delete_session_directory(self, session: PlaybackSession) -> None:
-        source_dir_id = session.source_dir_id or self._session_directory_id(session)
-        if source_dir_id is None:
-            return
         owned_ids = {
             directory.id
             for directory in self.cloud.list_directories(session.play_root_id)
         }
-        if source_dir_id in owned_ids:
-            self.cloud.delete([source_dir_id])
+        if session.session_dir_id in owned_ids:
+            self.cloud.delete([session.session_dir_id])
 
     def _payload(self, session: PlaybackSession) -> dict[str, object]:
         selected = next(
@@ -213,6 +209,7 @@ class PlaybackService:
             "task_id": session.task_id,
             "status": session.status,
             "message": session.message,
+            "progress_percent": self._progress_percent(session),
             "expires_at": session.expires_at.isoformat(),
             "files": [self._file_payload(item) for item in session.files],
             "file": self._file_payload(selected) if selected is not None else None,
@@ -225,3 +222,12 @@ class PlaybackService:
             "name": item.name,
             "size": item.size_bytes,
         }
+
+    def _progress_percent(self, session: PlaybackSession) -> int:
+        if session.status == "offline_waiting":
+            return max(8, session.progress_percent)
+        if session.status == "select_required":
+            return 92
+        if session.status == "failed":
+            return 100
+        return session.progress_percent
