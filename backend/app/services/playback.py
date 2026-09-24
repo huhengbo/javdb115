@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import RLock
 from uuid import uuid4
@@ -51,7 +51,7 @@ class PlaybackService:
         play_root_id = self._play_root_id()
         session_id = uuid4().hex[:16]
         task_id = self.cloud.add_offline_url(value, play_root_id, savepath=session_id)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         session = PlaybackSession(
             id=session_id,
             task_id=task_id,
@@ -80,7 +80,11 @@ class PlaybackService:
         if source_dir_id is None:
             session.status = "offline_waiting"
             progress = task.progress_percent if task is not None else None
-            session.message = f"等待 115 离线文件 · {progress}%" if progress is not None else "等待 115 离线文件"
+            session.message = (
+                f"等待 115 离线文件 · {progress}%"
+                if progress is not None
+                else "等待 115 离线文件"
+            )
             return self._payload(session)
 
         session.source_dir_id = source_dir_id
@@ -188,7 +192,10 @@ class PlaybackService:
         source_dir_id = session.source_dir_id or self._session_directory_id(session)
         if source_dir_id is None:
             return
-        owned_ids = {directory.id for directory in self.cloud.list_directories(session.play_root_id)}
+        owned_ids = {
+            directory.id
+            for directory in self.cloud.list_directories(session.play_root_id)
+        }
         if source_dir_id in owned_ids:
             self.cloud.delete([source_dir_id])
 
