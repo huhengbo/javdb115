@@ -1,7 +1,7 @@
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { client } from '../../api';
-import type { MagnetItem, MovieDetail, MovieReview, Task, TaskHistoryItem } from '../../types';
+import type { MagnetItem, MovieDetail, MovieReview, PlaybackSession, Task, TaskHistoryItem } from '../../types';
 import type { ActorRef } from '../../lib/javdb';
 import { formatMagnetSize } from '../../lib/javdb';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -11,6 +11,7 @@ import { MovieReviews } from './MovieReviews';
 import { MovieSummary } from './MovieSummary';
 import { MovieTaskHistory, taskSummary } from './MovieTaskHistory';
 import { PreviewGrid } from './PreviewGrid';
+import { PlaybackDialog } from './PlaybackDialog';
 import { SimilarMovies } from './SimilarMovies';
 
 type Props = {
@@ -37,6 +38,9 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
   const [confirmMagnet, setConfirmMagnet] = useState<MagnetItem | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<DuplicateWarning | null>(null);
   const [submittingHash, setSubmittingHash] = useState<string | null>(null);
+  const [playbackOpen, setPlaybackOpen] = useState(false);
+  const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +53,9 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
     setTaskHistory([]);
     setReviewsError(null);
     setTaskHistoryError(null);
+    setPlaybackOpen(false);
+    setPlaybackSession(null);
+    setPlaybackError(null);
     loadMovieDetail(movieId)
       .then(({ movieDetail, movieMagnets, movieReviews, movieReviewsError }) => {
         if (cancelled) return;
@@ -73,6 +80,42 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = previousOverflow; };
   }, [isTop]);
+
+  useEffect(() => {
+    if (!playbackOpen || !playbackSession) return;
+    if (!['submitting', 'offline_waiting', 'locating', 'resolving'].includes(playbackSession.status)) return;
+    const timer = window.setTimeout(() => {
+      client.playback(playbackSession.session_id)
+        .then((result) => {
+          setPlaybackSession(result);
+          setPlaybackError(null);
+        })
+        .catch((err: Error) => setPlaybackError(err.message));
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [playbackOpen, playbackSession]);
+
+  async function startPlayback(magnet: MagnetItem) {
+    setPlaybackOpen(true);
+    setPlaybackSession(null);
+    setPlaybackError(null);
+    try {
+      const url = magnet.url || `magnet:?xt=urn:btih:${magnet.hash}&dn=${encodeURIComponent(magnet.name)}`;
+      setPlaybackSession(await client.createPlayback(url));
+    } catch (err) {
+      setPlaybackError((err as Error).message);
+    }
+  }
+
+  async function selectPlaybackFile(fileId: string) {
+    if (!playbackSession) return;
+    setPlaybackError(null);
+    try {
+      setPlaybackSession(await client.selectPlaybackFile(playbackSession.session_id, fileId));
+    } catch (err) {
+      setPlaybackError((err as Error).message);
+    }
+  }
 
   async function submitMagnet(force = false) {
     const magnet = force ? duplicateWarning?.magnet : confirmMagnet;
@@ -133,6 +176,7 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
               onOpenActor={(actor) => onOpenActor(actor, movieId)}
               onOpenMovie={onOpenMovie}
               onPreview={setPreviewIndex}
+              onPlayMagnet={(magnet) => void startPlayback(magnet)}
               onSelectMagnet={(magnet) => {
                 setSubmitError(null);
                 setConfirmMagnet(magnet);
@@ -153,6 +197,17 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
       ) : null}
       {previewIndex !== null && detail ? (
         <ImageLightbox images={detail.preview_images} index={previewIndex} onChange={setPreviewIndex} onClose={() => setPreviewIndex(null)} />
+      ) : null}
+      {playbackOpen ? (
+        <PlaybackDialog
+          error={playbackError}
+          session={playbackSession}
+          onClose={() => {
+            setPlaybackOpen(false);
+            setPlaybackError(null);
+          }}
+          onSelectFile={(fileId) => void selectPlaybackFile(fileId)}
+        />
       ) : null}
       {confirmMagnet ? (
         <ConfirmDialog
@@ -199,6 +254,7 @@ type ContentProps = {
   readonly onOpenActor: (actor: ActorRef) => void;
   readonly onOpenMovie: (id: string) => void;
   readonly onPreview: (index: number) => void;
+  readonly onPlayMagnet: (magnet: MagnetItem) => void;
   readonly onSelectMagnet: (magnet: MagnetItem) => void;
   readonly reviews: MovieReview[];
   readonly reviewsError: string | null;
@@ -211,7 +267,7 @@ function Content(props: ContentProps) {
   return (
     <div className="p-4 pb-[calc(5rem+env(safe-area-inset-bottom))]">
       <MovieSummary detail={props.detail} onOpenActor={props.onOpenActor} />
-      <MagnetList magnets={props.magnets} onSelect={props.onSelectMagnet} />
+      <MagnetList magnets={props.magnets} onPlay={props.onPlayMagnet} onSelect={props.onSelectMagnet} />
       <MovieTaskHistory error={props.taskHistoryError} items={props.taskHistory} loading={props.taskHistoryLoading} />
       <PreviewGrid images={props.detail.preview_images} onPreview={props.onPreview} />
       <SimilarMovies movies={props.detail.relative_movies} onOpen={props.onOpenMovie} />
