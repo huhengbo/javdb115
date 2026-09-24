@@ -184,9 +184,13 @@ class PlaybackService:
         with _SESSIONS_LOCK:
             expired = [session for session in _SESSIONS.values() if session.expires_at <= now]
         for session in expired:
-            self._delete_session_directory(session)
+            self._cleanup_session(session)
             with _SESSIONS_LOCK:
                 _SESSIONS.pop(session.id, None)
+
+    def _cleanup_session(self, session: PlaybackSession) -> None:
+        self.cloud.delete_offline_task(session.task_id)
+        self._delete_session_directory(session)
 
     def _delete_session_directory(self, session: PlaybackSession) -> None:
         source_dir_id = session.source_dir_id or self._session_directory_id(session)
