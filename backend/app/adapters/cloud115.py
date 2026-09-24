@@ -54,6 +54,9 @@ class Cloud115Client:
     def get_offline_tasks(self, task_ids: set[str]) -> dict[str, CloudOfflineTask]:
         raise NotImplementedError
 
+    def get_download_url(self, file_id: str, pick_code: str | None = None) -> str:
+        raise NotImplementedError
+
     def create_directory(self, parent_id: str, name: str) -> str:
         raise NotImplementedError
 
@@ -135,6 +138,17 @@ class P115CloudClient(Cloud115Client):
                 if not remaining:
                     return found
         return found
+
+    def get_download_url(self, file_id: str, pick_code: str | None = None) -> str:
+        try:
+            resolved_pick_code = pick_code or str(self.client.to_pickcode(file_id))
+            result = self.client.download_url(resolved_pick_code)
+        except Exception as exc:
+            raise IntegrationError("115 playback URL lookup failed") from exc
+        url = str(result or "").strip()
+        if not url:
+            raise IntegrationError("115 playback URL response was empty")
+        return url
 
     def create_directory(self, parent_id: str, name: str) -> str:
         result = self._call("fs_mkdir", {"pid": parent_id, "cname": name})
@@ -286,6 +300,7 @@ class P115CloudClient(Cloud115Client):
             name=str(item.get("n") or item.get("name") or item.get("file_name")),
             size_bytes=to_int(item.get("s") or item.get("size")),
             is_directory=self._is_directory(item),
+            pick_code=to_optional_str(item.get("pc") or item.get("pick_code") or item.get("pickcode")),
         )
 
     def _to_offline_task(self, item: dict[str, Any], status: str) -> CloudOfflineTask:
