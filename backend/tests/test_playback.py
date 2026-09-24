@@ -16,7 +16,7 @@ class FakeCloud:
         if parent_id == "download-root":
             return [CloudDirectory("play-root", ".play", None, True)]
         if parent_id == "play-root":
-            return [CloudDirectory("source-dir", "owned-session", None, True)]
+            return [CloudDirectory("session-dir", "owned-session", None, True)]
         return []
 
     def create_directory(self, parent_id: str, name: str) -> str:
@@ -43,7 +43,7 @@ class FakeCloud:
         }
 
     def list_items(self, parent_id: str) -> list[CloudItem]:
-        assert parent_id == "source-dir"
+        assert parent_id == "session-dir"
         return self.items
 
     def get_download_url(self, file_id: str, pick_code: str | None = None) -> str:
@@ -107,4 +107,4 @@ def test_cleanup_removes_offline_record_before_playback_directory() -> None:
     service._cleanup_session(session)
 
     assert cloud.deleted_offline_tasks == ["task-hash"]
-    assert cloud.deleted == ["source-dir"]
+    assert cloud.deleted == ["session-dir"]
