@@ -42,6 +42,7 @@ class PlaybackResponse(BaseModel):
     task_id: str
     status: str
     message: str
+    progress_percent: int
     expires_at: str
     files: list[PlaybackFileResponse]
     file: PlaybackFileResponse | None
