@@ -57,6 +57,9 @@ class Cloud115Client:
     def get_download_url(self, file_id: str, pick_code: str | None = None) -> str:
         raise NotImplementedError
 
+    def delete_offline_task(self, task_id: str) -> None:
+        raise NotImplementedError
+
     def create_directory(self, parent_id: str, name: str) -> str:
         raise NotImplementedError
 
@@ -149,6 +152,13 @@ class P115CloudClient(Cloud115Client):
         if not url:
             raise IntegrationError("115 playback URL response was empty")
         return url
+
+    def delete_offline_task(self, task_id: str) -> None:
+        result = self._call(
+            "clouddownload_task_del",
+            {"hash[0]": task_id, "flag": 0},
+        )
+        self._raise_if_response_failed("clouddownload_task_del", result)
 
     def create_directory(self, parent_id: str, name: str) -> str:
         result = self._call("fs_mkdir", {"pid": parent_id, "cname": name})
