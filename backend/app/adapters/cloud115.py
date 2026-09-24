@@ -300,7 +300,9 @@ class P115CloudClient(Cloud115Client):
             name=str(item.get("n") or item.get("name") or item.get("file_name")),
             size_bytes=to_int(item.get("s") or item.get("size")),
             is_directory=self._is_directory(item),
-            pick_code=to_optional_str(item.get("pc") or item.get("pick_code") or item.get("pickcode")),
+            pick_code=to_optional_str(
+                item.get("pc") or item.get("pick_code") or item.get("pickcode")
+            ),
         )
 
     def _to_offline_task(self, item: dict[str, Any], status: str) -> CloudOfflineTask:
