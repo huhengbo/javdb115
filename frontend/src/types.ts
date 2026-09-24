@@ -308,3 +308,20 @@ export type P115QrStatus = {
   message: string;
   account: P115Account | null;
 };
+
+export type PlaybackFile = {
+  id: string;
+  name: string;
+  size: number | null;
+};
+
+export type PlaybackSession = {
+  session_id: string;
+  task_id: string;
+  status: 'submitting' | 'offline_waiting' | 'locating' | 'select_required' | 'resolving' | 'ready' | 'failed' | 'expired';
+  message: string;
+  expires_at: string;
+  files: PlaybackFile[];
+  file: PlaybackFile | null;
+  play_url: string | null;
+};
