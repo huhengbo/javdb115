@@ -180,7 +180,7 @@ class PlaybackService:
         return session
 
     def _cleanup_expired(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         with _SESSIONS_LOCK:
             expired = [session for session in _SESSIONS.values() if session.expires_at <= now]
         for session in expired:
