@@ -17,6 +17,7 @@ class CloudItem:
     name: str
     size_bytes: int | None
     is_directory: bool
+    pick_code: str | None = None
 
 
 @dataclass(frozen=True)

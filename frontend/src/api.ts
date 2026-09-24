@@ -15,6 +15,7 @@ import type {
   P115LoginDevice,
   P115QrStart,
   P115QrStatus,
+  PlaybackSession,
   RankingActor,
   SettingItem,
   TaskFilterValue,
@@ -115,6 +116,18 @@ export const client = {
     api<{ ok: boolean; task_id: string }>('/api/tools/offline', {
       method: 'POST',
       body: JSON.stringify({ url })
+    }),
+  createPlayback: (url: string) =>
+    api<PlaybackSession>('/api/tools/playback', {
+      method: 'POST',
+      body: JSON.stringify({ url })
+    }),
+  playback: (sessionId: string) =>
+    api<PlaybackSession>(`/api/tools/playback/${encodeURIComponent(sessionId)}`),
+  selectPlaybackFile: (sessionId: string, fileId: string) =>
+    api<PlaybackSession>(`/api/tools/playback/${encodeURIComponent(sessionId)}/select`, {
+      method: 'POST',
+      body: JSON.stringify({ file_id: fileId })
     }),
   javdbLoginStatus: () => api<JavdbLoginStatus>('/api/settings/javdb/login'),
   loginJavdb: (username: string, password: string) =>
