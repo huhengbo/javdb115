@@ -8,6 +8,7 @@ class FakeCloud:
     def __init__(self, items: list[CloudItem]) -> None:
         self.items = items
         self.deleted: list[str] = []
+        self.deleted_offline_tasks: list[str] = []
         self.created: list[tuple[str, str]] = []
 
     def list_directories(self, parent_id: str) -> list[CloudDirectory]:
@@ -48,6 +49,9 @@ class FakeCloud:
     def get_download_url(self, file_id: str, pick_code: str | None = None) -> str:
         return f"https://download.example/{pick_code or file_id}"
 
+    def delete_offline_task(self, task_id: str) -> None:
+        self.deleted_offline_tasks.append(task_id)
+
     def delete(self, file_ids: list[str]) -> None:
         self.deleted.extend(file_ids)
 
@@ -87,3 +91,18 @@ def test_playback_requires_selection_for_similar_large_files() -> None:
     ready = service.select(str(created["session_id"]), "part-2")
     assert ready["status"] == "ready"
     assert ready["play_url"] == "https://download.example/pc-2"
+
+
+def test_cleanup_removes_offline_record_before_playback_directory() -> None:
+    cloud = FakeCloud([CloudItem("main", "ABC-123.mp4", 1_000_000_000, False, "pc-main")])
+    service = PlaybackService(cloud, "download-root")
+
+    created = service.create("magnet:?xt=urn:btih:cleanup-test")
+    session = service._session(str(created["session_id"]))
+    session.id = "owned-session"
+    session.source_dir_id = "source-dir"
+
+    service._cleanup_session(session)
+
+    assert cloud.deleted_offline_tasks == ["task-hash"]
+    assert cloud.deleted == ["source-dir"]
