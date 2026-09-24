@@ -320,6 +320,7 @@ export type PlaybackSession = {
   task_id: string;
   status: 'submitting' | 'offline_waiting' | 'locating' | 'select_required' | 'resolving' | 'ready' | 'failed' | 'expired';
   message: string;
+  progress_percent: number;
   expires_at: string;
   files: PlaybackFile[];
   file: PlaybackFile | null;
