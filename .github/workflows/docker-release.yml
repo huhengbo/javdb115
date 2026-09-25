@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: docker/setup-buildx-action@v4.3.0
       - name: Build native image for scan and smoke test
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           load: true
@@ -116,7 +116,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.is_release == 'true' }}
             type=raw,value=latest,enable=${{ steps.version.outputs.is_release == 'true' }}
       - name: Build and push amd64 + arm64
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
