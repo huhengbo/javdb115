@@ -142,6 +142,8 @@ class FollowUpdate(BaseModel):
 class ManualOfflineRequest(BaseModel):
     magnet_hash: str
     force: bool = False
+    detail: dict[str, object] | None = None
+    magnet: dict[str, object] | None = None
 
 
 class ManualOfflineResponse(BaseModel):
