@@ -79,6 +79,19 @@ export function formatMagnetSize(sizeMb: number): string {
   return `${bytes.toFixed(0)} B`;
 }
 
+export function formatBytes(bytes: number): string {
+  if (bytes >= BYTES_PER_GB) {
+    return `${(bytes / BYTES_PER_GB).toFixed(2)} GB`;
+  }
+  if (bytes >= BYTES_PER_MB) {
+    return `${(bytes / BYTES_PER_MB).toFixed(0)} MB`;
+  }
+  if (bytes >= BYTES_PER_KB) {
+    return `${(bytes / BYTES_PER_KB).toFixed(0)} KB`;
+  }
+  return `${bytes.toFixed(0)} B`;
+}
+
 export function actorLabel(name: string, fallback?: string): string {
   return name.trim() || fallback || '未知演员';
 }
