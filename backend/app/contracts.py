@@ -139,9 +139,31 @@ class FollowUpdate(BaseModel):
     selected_tag_names: list[str] | None = None
 
 
+class ManualOfflineActorInput(BaseModel):
+    id: str = ""
+    name: str
+    avatar_url: str = ""
+
+
+class ManualOfflineWorkInput(BaseModel):
+    code: str
+    title: str
+    cover_url: str = ""
+    release_date: str = ""
+    actors: list[ManualOfflineActorInput] = Field(default_factory=list)
+
+
+class ManualOfflineMagnetInput(BaseModel):
+    hash: str
+    name: str
+    size_mb: float | None = None
+
+
 class ManualOfflineRequest(BaseModel):
     magnet_hash: str
     force: bool = False
+    work: ManualOfflineWorkInput | None = None
+    magnet: ManualOfflineMagnetInput | None = None
 
 
 class ManualOfflineResponse(BaseModel):
