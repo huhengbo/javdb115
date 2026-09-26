@@ -177,7 +177,7 @@ def submit_movie_offline(
             javdb=client,
         )
     )
-    if (payload.work is not None or payload.magnet is not None:
+    if payload.work is not None or payload.magnet is not None:
         if payload.work is None or payload.magnet is None:
             raise ValidationAppError("作品信息和磁力信息必须同时提供")
         result = service.enqueue_prefetched(
