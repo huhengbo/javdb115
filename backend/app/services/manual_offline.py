@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
@@ -15,8 +14,6 @@ from app.services.javdb_movie_payload import JavdbMoviePayload, fetch_javdb_movi
 from app.services.task_state import TaskStateService, TaskTransition
 
 BYTES_PER_MB = 1024 * 1024
-LOGGER = logging.getLogger(__name__)
-
 
 class ManualJavdbClient(Protocol):
     def movie_detail(self, movie_id: str) -> dict[str, Any]: ...
