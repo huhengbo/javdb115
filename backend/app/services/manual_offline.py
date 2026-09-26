@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
@@ -9,11 +10,15 @@ from app.repositories.actors import ActorsRepository
 from app.repositories.catalog import CatalogRepository
 from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
+from app.repositories.task_events import TaskEventsRepository
 from app.repositories.tasks import TasksRepository
+from app.services.cloud import CloudServiceFactory
 from app.services.javdb_movie_payload import JavdbMoviePayload, fetch_javdb_movie_payload
+from app.services.notifier import NotificationService
 from app.services.task_state import TaskStateService, TaskTransition
 
 BYTES_PER_MB = 1024 * 1024
+LOGGER = logging.getLogger(__name__)
 
 class ManualJavdbClient(Protocol):
     def movie_detail(self, movie_id: str) -> dict[str, Any]: ...
@@ -52,9 +57,16 @@ class ManualOfflineService:
         magnet_hash: str,
         *,
         force: bool = False,
+        defer_115: bool = False,
     ) -> ManualOfflineResult:
         payload = fetch_javdb_movie_payload(self.javdb, movie_id)
-        return self.submit_prefetched(movie_id, magnet_hash, payload, force=force)
+        return self.submit_prefetched(
+            movie_id,
+            magnet_hash,
+            payload,
+            force=force,
+            defer_115=defer_115,
+        )
 
     def submit_prefetched(
         self,
@@ -63,6 +75,7 @@ class ManualOfflineService:
         payload: JavdbMoviePayload,
         *,
         force: bool = False,
+        defer_115: bool = False,
     ) -> ManualOfflineResult:
         magnet_data = self._find_magnet(payload.magnets, movie_id, magnet_hash)
         work = self._to_work(movie_id, payload.detail)
@@ -74,23 +87,64 @@ class ManualOfflineService:
         magnet_id = self.catalog.add_magnet(work_id, magnet, "manual", "manual_submit", 0)
         actor_id = self._actor_id(payload.detail)
         task_id = self.tasks.create(work_id, actor_id, magnet_id)
+        if defer_115:
+            self._state().transition(
+                task_id,
+                TaskTransition(
+                    "pending",
+                    "manual_115_queued",
+                    context={"movie_id": movie_id},
+                ),
+            )
+            self.logs.add(
+                "info",
+                "manual_115_queued",
+                "Manual magnet queued for 115 submission",
+                task_id,
+                {"movie_id": movie_id},
+            )
+            self._commit()
+            return ManualOfflineResult(task_id)
+
+        self._commit()
+        cloud_task_id = self._submit_to_115(task_id, work, magnet)
         self._state().transition(
             task_id,
             TaskTransition(
-                "pending",
-                "manual_115_queued",
-                context={"movie_id": movie_id},
+                "submitted",
+                "manual_115_submitted",
+                cloud_task_id=cloud_task_id,
             ),
         )
         self.logs.add(
             "info",
-            "manual_115_queued",
-            "Manual magnet queued for 115 submission",
+            "manual_115_submitted",
+            "Manual magnet submitted",
             task_id,
             {"movie_id": movie_id},
         )
         self._commit()
+        self._send_submitted_notification(task_id, work, magnet)
         return ManualOfflineResult(task_id)
+
+    def _submit_to_115(self, task_id: int, work: JavdbWork, magnet: JavdbMagnet) -> str:
+        try:
+            return (
+                CloudServiceFactory(self.settings)
+                .create()
+                .add_offline_url(
+                    magnet.url,
+                    self.settings.require("p115_download_dir_id"),
+                    savepath=work.code,
+                )
+            )
+        except Exception as exc:
+            self._state().transition(
+                task_id,
+                TaskTransition("failed", "115_submit_failed", error_message=str(exc)),
+            )
+            self._commit()
+            raise
 
     def _find_magnet(
         self,
@@ -139,9 +193,29 @@ class ManualOfflineService:
         actor = self.actors.find_by_external_id(external_id)
         return int(cast(int, actor["id"])) if actor else None
 
-    def _state(self) -> TaskStateService:
-        from app.repositories.task_events import TaskEventsRepository
+    def _size_label(self, magnet: JavdbMagnet) -> str:
+        if magnet.size_bytes is None:
+            return "未知"
+        return f"{magnet.size_bytes / (1024**3):.2f} GB"
 
+    def _send_submitted_notification(
+        self,
+        task_id: int,
+        work: JavdbWork,
+        magnet: JavdbMagnet,
+    ) -> None:
+        try:
+            NotificationService(self.settings).send_submitted(work, self._size_label(magnet))
+        except Exception as exc:
+            self._log_notification_failure(task_id, work.code, exc)
+
+    def _log_notification_failure(self, task_id: int, code: str, exc: Exception) -> None:
+        try:
+            self.logs.add("error", "notification_failed", str(exc), task_id, {"code": code})
+        except Exception:
+            LOGGER.exception("Unable to record notification failure")
+
+    def _state(self) -> TaskStateService:
         return TaskStateService(self.tasks, TaskEventsRepository(self.tasks.connection))
 
     def _commit(self) -> None:
