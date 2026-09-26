@@ -18,6 +18,10 @@ from app.repositories.task_events import TaskEventsRepository
 from app.repositories.tasks import TasksRepository
 from app.services.follow_workflow import FollowWorkflowDependencies, FollowWorkflowService
 from app.services.manual_offline import ManualOfflineDependencies, ManualOfflineService
+from app.services.offline_submission_queue import (
+    OfflineSubmissionQueueDependencies,
+    OfflineSubmissionQueueService,
+)
 from app.services.task_retry import TaskRetryDependencies, TaskRetryService
 
 EMPTY_FILTER_RULES = '{"min_size_gb":0,"required_keywords":[],"excluded_keywords":[]}'
@@ -117,7 +121,7 @@ class FakeCloud:
         return "cloud-task-1"
 
 
-def test_manual_offline_service_creates_submitted_task(
+def test_manual_offline_service_queues_task_without_waiting_for_115(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -130,11 +134,33 @@ def test_manual_offline_service_creates_submitted_task(
     events = TaskEventsRepository(connection).list_for_tasks([int(cast(int, task["id"]))])
 
     assert result.task_id == task["id"]
+    assert task["status"] == "pending"
+    assert task["stage"] == "manual_115_queued"
+    assert task["cloud_task_id"] is None
+    assert task["actor"]["name"] == "Actor One"
+    assert logs[0]["stage"] == "manual_115_queued"
+    assert events[int(cast(int, task["id"]))][0]["to_stage"] == "manual_115_queued"
+
+
+def test_offline_submission_queue_submits_queued_task(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    connection = setup_manual_database(monkeypatch, tmp_path)
+    result = ManualOfflineService(manual_dependencies(connection)).submit("abc123", "hash-1")
+    monkeypatch.setattr(
+        "app.services.offline_submission_queue.CloudServiceFactory.create",
+        lambda self: FakeCloud(),
+    )
+
+    processed = OfflineSubmissionQueueService(queue_dependencies(connection)).process_next()
+    task = TasksRepository(connection).get(int(cast(int, result.task_id)))
+
+    assert processed is True
+    assert task is not None
     assert task["status"] == "submitted"
     assert task["stage"] == "manual_115_submitted"
-    assert task["actor"]["name"] == "Actor One"
-    assert logs[0]["stage"] == "manual_115_submitted"
-    assert events[int(cast(int, task["id"]))][0]["to_stage"] == "manual_115_submitted"
+    assert task["cloud_task_id"] == "cloud-task-1"
 
 
 def test_manual_offline_duplicate_requires_force(
@@ -166,11 +192,16 @@ def test_manual_offline_keeps_task_when_notification_fails(
         raise RuntimeError("Telegram sendPhoto failed: HTTP 400")
 
     monkeypatch.setattr(
-        "app.services.manual_offline.NotificationService.send_submitted",
+        "app.services.offline_submission_queue.NotificationService.send_submitted",
         fail_notification,
+    )
+    monkeypatch.setattr(
+        "app.services.offline_submission_queue.CloudServiceFactory.create",
+        lambda self: FakeCloud(),
     )
 
     result = ManualOfflineService(manual_dependencies(connection)).submit("abc123", "hash-1")
+    OfflineSubmissionQueueService(queue_dependencies(connection)).process_next()
     task = TasksRepository(connection).get_raw(int(cast(int, result.task_id)))
     stages = [str(log["stage"]) for log in LogsRepository(connection).list()]
 
@@ -178,6 +209,7 @@ def test_manual_offline_keeps_task_when_notification_fails(
     assert task["status"] == "submitted"
     assert "notification_failed" in stages
     assert "manual_115_submitted" in stages
+    assert "manual_115_queued" in stages
 
 
 def test_task_retry_resubmits_failed_manual_task(
@@ -314,10 +346,6 @@ def setup_manual_database(
             external_id="actor-1",
         )
     )
-    monkeypatch.setattr(
-        "app.services.manual_offline.CloudServiceFactory.create",
-        lambda self: FakeCloud(),
-    )
     return connection
 
 
@@ -377,6 +405,15 @@ def follow_dependencies(
         logs=LogsRepository(connection),
         settings=SettingsRepository(connection),
         javdb=javdb or FollowWorkflowClient(),
+    )
+
+
+def queue_dependencies(connection: sqlite3.Connection) -> OfflineSubmissionQueueDependencies:
+    return OfflineSubmissionQueueDependencies(
+        catalog=CatalogRepository(connection),
+        logs=LogsRepository(connection),
+        settings=SettingsRepository(connection),
+        tasks=TasksRepository(connection),
     )
 
 
