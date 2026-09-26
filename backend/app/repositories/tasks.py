@@ -115,15 +115,16 @@ class TasksRepository:
         return self._list_tasks(where_sql, UNFINISHED_STATUSES, None)
 
     def list_queued_submissions(self, limit: int = 1) -> list[dict[str, Any]]:
-        return self._list_tasks(
+        queued = self._list_tasks(
             """
             WHERE t.status = 'pending'
               AND t.stage = 'manual_115_queued'
               AND t.cloud_task_id IS NULL
             """,
             (),
-            limit,
+            None,
         )
+        return list(reversed(queued))[:limit]
 
     def list_incomplete_submissions(self, cutoff_iso: str) -> list[dict[str, Any]]:
         return self._list_tasks(
