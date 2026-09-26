@@ -122,10 +122,9 @@ class FakeCloud:
 
 
 def test_manual_offline_service_queues_task_without_waiting_for_115(
-    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    connection = setup_manual_database(monkeypatch, tmp_path)
+    connection = setup_manual_database(tmp_path)
     service = ManualOfflineService(manual_dependencies(connection))
 
     result = service.submit("abc123", "hash-1")
@@ -146,7 +145,7 @@ def test_offline_submission_queue_submits_queued_task(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    connection = setup_manual_database(monkeypatch, tmp_path)
+    connection = setup_manual_database(tmp_path)
     result = ManualOfflineService(manual_dependencies(connection)).submit("abc123", "hash-1")
     monkeypatch.setattr(
         "app.services.offline_submission_queue.CloudServiceFactory.create",
@@ -164,10 +163,9 @@ def test_offline_submission_queue_submits_queued_task(
 
 
 def test_manual_offline_duplicate_requires_force(
-    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    connection = setup_manual_database(monkeypatch, tmp_path)
+    connection = setup_manual_database(tmp_path)
     service = ManualOfflineService(manual_dependencies(connection))
 
     first = service.submit("abc123", "hash-1")
@@ -186,7 +184,7 @@ def test_manual_offline_keeps_task_when_notification_fails(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    connection = setup_manual_database(monkeypatch, tmp_path)
+    connection = setup_manual_database(tmp_path)
 
     def fail_notification(self: Any, work: Any, size_label: str) -> None:
         raise RuntimeError("Telegram sendPhoto failed: HTTP 400")
@@ -216,7 +214,7 @@ def test_task_retry_resubmits_failed_manual_task(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    connection = setup_manual_database(monkeypatch, tmp_path)
+    connection = setup_manual_database(tmp_path)
     result = ManualOfflineService(manual_dependencies(connection)).submit("abc123", "hash-1")
     task_id = int(cast(int, result.task_id))
     TasksRepository(connection).update_status(task_id, "failed", "115_submit_failed")
@@ -333,10 +331,7 @@ def movie_summary() -> dict[str, Any]:
     }
 
 
-def setup_manual_database(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> sqlite3.Connection:
+def setup_manual_database(tmp_path: Path) -> sqlite3.Connection:
     connection = setup_database(tmp_path).connect()
     SettingsRepository(connection).upsert("p115_download_dir_id", "dir-1", False)
     ActorsRepository(connection).create(
