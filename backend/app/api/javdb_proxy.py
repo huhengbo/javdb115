@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from app.adapters.javdb_api import JavdbApiClient
 from app.contracts import ManualOfflineRequest, ManualOfflineResponse, MovieBundleOut, TaskOut
 from app.dependencies import get_connection, get_javdb_client, require_user
-from app.errors import IntegrationError, JavdbAuthRequiredError
+from app.errors import IntegrationError, JavdbAuthRequiredError, ValidationAppError
 from app.repositories.actors import ActorsRepository
 from app.repositories.catalog import CatalogRepository
 from app.repositories.logs import LogsRepository
@@ -167,7 +167,7 @@ def submit_movie_offline(
     connection: Connection = Depends(get_connection),
     client: JavdbApiClient = Depends(get_client),
 ) -> ManualOfflineResponse:
-    result = ManualOfflineService(
+    service = ManualOfflineService(
         ManualOfflineDependencies(
             actors=ActorsRepository(connection),
             catalog=CatalogRepository(connection),
@@ -176,7 +176,25 @@ def submit_movie_offline(
             tasks=TasksRepository(connection),
             javdb=client,
         )
-    ).submit(movie_id, payload.magnet_hash, force=payload.force)
+    )
+    if (payload.work is not None or payload.magnet is not None:
+        if payload.work is None or payload.magnet is None:
+            raise ValidationAppError("作品信息和磁力信息必须同时提供")
+        result = service.enqueue_prefetched(
+            movie_id,
+            payload.magnet_hash,
+            {
+                "number": payload.work.code,
+                "title": payload.work.title,
+                "cover_url": payload.work.cover_url,
+                "release_date": payload.work.release_date,
+                "actors": [actor.model_dump() for actor in payload.work.actors],
+            },
+            payload.magnet.model_dump(),
+            force=payload.force,
+        )
+    else:
+        result = service.submit(movie_id, payload.magnet_hash, force=payload.force)
     return ManualOfflineResponse(
         ok=result.task_id is not None,
         task_id=result.task_id,
