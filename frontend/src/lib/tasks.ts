@@ -19,6 +19,8 @@ export const stageLabels: Record<string, string> = {
   duplicate_completed: '发现已完成任务',
   follow_check_failed: '关注检查失败',
   javdb_movie_failed: '作品信息获取失败',
+  manual_115_queued: '已加入 115 离线队列',
+  manual_115_submitting: '正在提交 115',
   manual_115_resubmitted: '手动重试已提交 115',
   manual_115_submitted: '手动提交 115'
 };
