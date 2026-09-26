@@ -61,6 +61,8 @@ def test_playback_auto_selects_clear_main_video() -> None:
         [
             CloudItem("main", "ABC-123.mkv", 4_000_000_000, False, "pc-main"),
             CloudItem("sample", "sample.mp4", 100_000_000, False, "pc-sample"),
+            CloudItem("subtitle", "ABC-123.zh.srt", 120_000, False, "pc-sub"),
+            CloudItem("ad", "最新地址.txt", 2_000, False, "pc-ad"),
         ]
     )
     service = PlaybackService(cloud, "download-root")
@@ -73,6 +75,7 @@ def test_playback_auto_selects_clear_main_video() -> None:
     assert result["status"] == "ready"
     assert result["file"] == {"id": "main", "name": "ABC-123.mkv", "size": 4_000_000_000}
     assert result["play_url"] == "https://download.example/pc-main"
+    assert cloud.deleted == ["sample", "ad"]
 
 
 def test_playback_requires_selection_for_similar_large_files() -> None:
@@ -93,6 +96,7 @@ def test_playback_requires_selection_for_similar_large_files() -> None:
     ready = service.select(str(created["session_id"]), "part-2")
     assert ready["status"] == "ready"
     assert ready["play_url"] == "https://download.example/pc-2"
+    assert cloud.deleted == ["part-1"]
 
 
 def test_cleanup_removes_offline_record_before_playback_directory() -> None:

@@ -119,11 +119,11 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
 
   async function submitMagnet(force = false) {
     const magnet = force ? duplicateWarning?.magnet : confirmMagnet;
-    if (!magnet || submittingHash) return;
+    if (!magnet || !detail || submittingHash) return;
     setSubmittingHash(magnet.hash);
     setSubmitError(null);
     try {
-      const result = await client.submitMovieOffline(movieId, magnet.hash, force);
+      const result = await client.submitMovieOffline(movieId, detail, magnet, force);
       if (result.duplicate_task && !force) {
         setConfirmMagnet(null);
         setDuplicateWarning({ magnet, task: result.duplicate_task });
@@ -131,8 +131,8 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
       }
       setConfirmMagnet(null);
       setDuplicateWarning(null);
-      setMessage(`已提交到 115，任务 #${result.task_id}`);
-      if (detail?.number) await refreshTaskHistory(detail.number);
+      setMessage(`已加入 115 离线队列，任务 #${result.task_id}`);
+      if (detail.number) void refreshTaskHistory(detail.number);
     } catch (err) {
       setSubmitError((err as Error).message);
     } finally {

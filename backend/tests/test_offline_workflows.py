@@ -17,7 +17,12 @@ from app.repositories.settings import SettingsRepository
 from app.repositories.task_events import TaskEventsRepository
 from app.repositories.tasks import TasksRepository
 from app.services.follow_workflow import FollowWorkflowDependencies, FollowWorkflowService
-from app.services.manual_offline import ManualOfflineDependencies, ManualOfflineService
+from app.services.manual_offline import (
+    ManualOfflineDependencies,
+    ManualOfflineQueueDependencies,
+    ManualOfflineQueueService,
+    ManualOfflineService,
+)
 from app.services.task_retry import TaskRetryDependencies, TaskRetryService
 
 EMPTY_FILTER_RULES = '{"min_size_gb":0,"required_keywords":[],"excluded_keywords":[]}'
@@ -135,6 +140,87 @@ def test_manual_offline_service_creates_submitted_task(
     assert task["actor"]["name"] == "Actor One"
     assert logs[0]["stage"] == "manual_115_submitted"
     assert events[int(cast(int, task["id"]))][0]["to_stage"] == "manual_115_submitted"
+
+
+def test_manual_offline_enqueue_returns_before_115_submission(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    connection = setup_manual_database(monkeypatch, tmp_path)
+    calls: list[tuple[str, str, str | None]] = []
+
+    class RecordingCloud:
+        def add_offline_url(
+            self,
+            url: str,
+            target_dir_id: str,
+            *,
+            savepath: str | None = None,
+        ) -> str:
+            calls.append((url, target_dir_id, savepath))
+            return "cloud-task-queued"
+
+    monkeypatch.setattr(
+        "app.services.manual_offline.CloudServiceFactory.create",
+        lambda self: RecordingCloud(),
+    )
+    client = ManualClient()
+    result = ManualOfflineService(manual_dependencies(connection)).enqueue_prefetched(
+        "abc123",
+        "hash-1",
+        client.movie_detail("abc123"),
+        client.movie_magnets("abc123")[0],
+    )
+
+    task = TasksRepository(connection).get(int(cast(int, result.task_id)))
+    assert calls == []
+    assert task is not None
+    assert task["status"] == "pending"
+    assert task["stage"] == "manual_115_queued"
+
+    processed = ManualOfflineQueueService(
+        manual_queue_dependencies(connection)
+    ).process_pending()
+
+    task = TasksRepository(connection).get(int(cast(int, result.task_id)))
+    assert processed == 1
+    assert calls == [
+        (
+            "magnet:?xt=urn:btih:hash-1&dn=ABC-123.torrent",
+            "dir-1",
+            "ABC-123",
+        )
+    ]
+    assert task is not None
+    assert task["status"] == "submitted"
+    assert task["stage"] == "manual_115_submitted"
+    assert task["cloud_task_id"] == "cloud-task-queued"
+
+
+def test_manual_offline_queued_task_blocks_duplicate(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    connection = setup_manual_database(monkeypatch, tmp_path)
+    client = ManualClient()
+    service = ManualOfflineService(manual_dependencies(connection))
+
+    first = service.enqueue_prefetched(
+        "abc123",
+        "hash-1",
+        client.movie_detail("abc123"),
+        client.movie_magnets("abc123")[0],
+    )
+    duplicate = service.enqueue_prefetched(
+        "abc123",
+        "hash-1",
+        client.movie_detail("abc123"),
+        client.movie_magnets("abc123")[0],
+    )
+
+    assert first.task_id is not None
+    assert duplicate.task_id is None
+    assert duplicate.duplicate_task is not None
 
 
 def test_manual_offline_duplicate_requires_force(
@@ -362,6 +448,17 @@ def manual_dependencies(connection: sqlite3.Connection) -> ManualOfflineDependen
         settings=SettingsRepository(connection),
         tasks=TasksRepository(connection),
         javdb=ManualClient(),
+    )
+
+
+def manual_queue_dependencies(
+    connection: sqlite3.Connection,
+) -> ManualOfflineQueueDependencies:
+    return ManualOfflineQueueDependencies(
+        catalog=CatalogRepository(connection),
+        logs=LogsRepository(connection),
+        settings=SettingsRepository(connection),
+        tasks=TasksRepository(connection),
     )
 
 
