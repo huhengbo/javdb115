@@ -7,7 +7,7 @@ from typing import Any, cast
 from app.security import iso_now
 
 UNFINISHED_STATUSES = ("submitted", "downloading")
-ACTIVE_DUPLICATE_STATUSES = ("submitted", "downloading", "organizing", "completed")
+ACTIVE_DUPLICATE_STATUSES = ("pending", "submitted", "downloading", "organizing", "completed")
 INCOMPLETE_SUBMISSION_STATUS = "pending"
 INCOMPLETE_SUBMISSION_STAGE = "created"
 ORGANIZING_STATUS = "organizing"
@@ -118,13 +118,42 @@ class TasksRepository:
         return self._list_tasks(
             """
             WHERE t.status = ?
-              AND t.stage = ?
+              AND t.stage IN (?, 'manual_115_submitting')
               AND t.cloud_task_id IS NULL
               AND t.updated_at <= ?
             """,
             (INCOMPLETE_SUBMISSION_STATUS, INCOMPLETE_SUBMISSION_STAGE, cutoff_iso),
             None,
         )
+
+    def list_manual_submission_queue_ids(self, limit: int = 10) -> list[int]:
+        rows = self.connection.execute(
+            """
+            SELECT id
+            FROM tasks
+            WHERE status = 'pending'
+              AND stage = 'manual_115_queued'
+              AND cloud_task_id IS NULL
+            ORDER BY id ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [int(row["id"]) for row in rows]
+
+    def claim_manual_submission(self, task_id: int) -> bool:
+        cursor = self.connection.execute(
+            """
+            UPDATE tasks
+            SET stage = 'manual_115_submitting', updated_at = ?
+            WHERE id = ?
+              AND status = 'pending'
+              AND stage = 'manual_115_queued'
+              AND cloud_task_id IS NULL
+            """,
+            (iso_now(), task_id),
+        )
+        return cursor.rowcount == 1
 
     def list_stale_organizing(self, cutoff_iso: str) -> list[dict[str, Any]]:
         return self._list_tasks(
