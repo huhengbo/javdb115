@@ -187,9 +187,15 @@ def submit_movie_offline(
                 magnets=[dict(payload.magnet)],
             ),
             force=payload.force,
+            defer_115=True,
         )
     else:
-        result = service.submit(movie_id, payload.magnet_hash, force=payload.force)
+        result = service.submit(
+            movie_id,
+            payload.magnet_hash,
+            force=payload.force,
+            defer_115=True,
+        )
     return ManualOfflineResponse(
         ok=result.task_id is not None,
         task_id=result.task_id,
