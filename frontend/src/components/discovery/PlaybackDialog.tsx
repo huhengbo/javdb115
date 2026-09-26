@@ -1,9 +1,9 @@
 import { Copy, ExternalLink, Play, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { PlaybackSession } from '../../types';
-import { formatMagnetSize } from '../../lib/javdb';
+import { formatBytes } from '../../lib/javdb';
 
-type PlayerMode = 'system' | 'potplayer' | 'vlc';
+type PlayerMode = 'system' | 'browser';
 const PLAYER_STORAGE_KEY = 'javdb115.playback.player';
 
 type Props = {
@@ -19,7 +19,11 @@ export function PlaybackDialog({ error, session, onClose, onSelectFile }: Props)
 
   useEffect(() => {
     const saved = window.localStorage.getItem(PLAYER_STORAGE_KEY);
-    if (saved === 'system' || saved === 'potplayer' || saved === 'vlc') setPlayer(saved);
+    if (saved === 'system' || saved === 'browser') {
+      setPlayer(saved);
+    } else if (saved === 'potplayer' || saved === 'vlc') {
+      setPlayer('system');
+    }
   }, []);
 
   function updatePlayer(value: PlayerMode) {
@@ -33,17 +37,24 @@ export function PlaybackDialog({ error, session, onClose, onSelectFile }: Props)
     setCopied(true);
   }
 
-  function openPlayer() {
+  async function openPlayer() {
     if (!session?.play_url) return;
-    if (player === 'potplayer') {
-      window.location.href = `potplayer://${session.play_url}`;
+    if (player === 'browser') {
+      window.open(session.play_url, '_blank', 'noopener,noreferrer');
       return;
     }
-    if (player === 'vlc') {
-      window.location.href = `vlc://${session.play_url}`;
-      return;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: session.file?.name || '在线播放',
+          url: session.play_url,
+        });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+      }
     }
-    window.open(session.play_url, '_blank', 'noopener,noreferrer');
+    window.location.href = session.play_url;
   }
 
   const progress = session?.progress_percent ?? 5;
@@ -90,7 +101,7 @@ export function PlaybackDialog({ error, session, onClose, onSelectFile }: Props)
               {session.files.map((file) => (
                 <button className="flex w-full items-center justify-between gap-3 rounded-lg border border-line p-3 text-left hover:bg-slate-50" key={file.id} onClick={() => onSelectFile(file.id)} type="button">
                   <span className="min-w-0 truncate text-sm text-ink">{file.name}</span>
-                  <span className="shrink-0 text-xs text-slate-500">{formatMagnetSize(file.size ?? 0)}</span>
+                  <span className="shrink-0 text-xs text-slate-500">{formatBytes(file.size ?? 0)}</span>
                 </button>
               ))}
             </div>
@@ -103,19 +114,18 @@ export function PlaybackDialog({ error, session, onClose, onSelectFile }: Props)
               <ProgressRing value={100} />
               <h3 className="mt-4 text-base font-semibold text-ink">播放已准备好</h3>
               <p className="mt-1 truncate text-sm text-slate-500">{session.file?.name}</p>
-              <p className="mt-1 text-xs text-slate-400">{formatMagnetSize(session.file?.size ?? 0)}</p>
+              <p className="mt-1 text-xs text-slate-400">{formatBytes(session.file?.size ?? 0)}</p>
             </div>
 
             <label className="mt-5 block text-xs font-medium text-slate-600">
               播放方式
               <select className="mt-1 min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm text-ink" value={player} onChange={(event) => updatePlayer(event.target.value as PlayerMode)}>
-                <option value="system">系统 / 浏览器打开</option>
-                <option value="potplayer">PotPlayer</option>
-                <option value="vlc">VLC</option>
+                <option value="system">本机播放器（系统选择）</option>
+                <option value="browser">浏览器播放</option>
               </select>
             </label>
 
-            <button className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white active:opacity-90" onClick={openPlayer} type="button">
+            <button className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-white active:opacity-90" onClick={() => void openPlayer()} type="button">
               <Play size={17} />立即播放
             </button>
             <div className="mt-2 grid grid-cols-2 gap-2">
