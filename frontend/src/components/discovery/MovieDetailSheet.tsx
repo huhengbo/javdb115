@@ -131,7 +131,7 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
       }
       setConfirmMagnet(null);
       setDuplicateWarning(null);
-      setMessage(`已提交到 115，任务 #${result.task_id}`);
+      setMessage(`已加入 115 离线队列，任务 #${result.task_id}`);
       if (detail?.number) await refreshTaskHistory(detail.number);
     } catch (err) {
       setSubmitError((err as Error).message);
