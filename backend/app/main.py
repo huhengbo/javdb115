@@ -24,12 +24,17 @@ from app.repositories.tasks import TasksRepository
 from app.scheduler import IntervalSchedulerService, SchedulerService
 from app.services.download_monitor import DownloadMonitorDependencies, DownloadMonitorService
 from app.services.follow_workflow import FollowWorkflowDependencies, FollowWorkflowService
+from app.services.offline_submission_queue import (
+    OfflineSubmissionQueueDependencies,
+    OfflineSubmissionQueueService,
+)
 from app.services.settings import DEFAULT_CHECK_CRON
 from app.services.telegram_commands import TelegramCommandService
 from app.services.telegram_movie_jobs import TelegramMovieJobDependencies, TelegramMovieJobRunner
 
 DOWNLOAD_MONITOR_CRON = "* * * * *"
 TELEGRAM_POLL_INTERVAL_SECONDS = 3
+OFFLINE_SUBMIT_INTERVAL_SECONDS = 1
 AppScheduler = SchedulerService | IntervalSchedulerService
 
 
@@ -52,8 +57,20 @@ def create_schedulers(database_path: Path) -> list[AppScheduler]:
 
     check_scheduler = SchedulerService(check_cron_provider, check_job)
     monitor_scheduler = SchedulerService(lambda: DOWNLOAD_MONITOR_CRON, monitor_job)
+    def offline_submit_job() -> None:
+        _run_db_job(database_path, _run_offline_submission_queue)
+
     telegram_scheduler = IntervalSchedulerService(TELEGRAM_POLL_INTERVAL_SECONDS, telegram_job)
-    return [check_scheduler, monitor_scheduler, telegram_scheduler]
+    offline_submit_scheduler = IntervalSchedulerService(
+        OFFLINE_SUBMIT_INTERVAL_SECONDS,
+        offline_submit_job,
+    )
+    return [
+        check_scheduler,
+        monitor_scheduler,
+        telegram_scheduler,
+        offline_submit_scheduler,
+    ]
 
 
 def _read_setting(database_path: Path, key: str) -> str | None:
@@ -92,6 +109,18 @@ def _run_download_monitor(connection: Connection) -> None:
             settings=settings_repo,
         )
     ).poll_unfinished()
+
+
+def _run_offline_submission_queue(connection: Connection) -> None:
+    settings_repo = SettingsRepository(connection)
+    OfflineSubmissionQueueService(
+        OfflineSubmissionQueueDependencies(
+            catalog=CatalogRepository(connection),
+            logs=LogsRepository(connection),
+            settings=settings_repo,
+            tasks=TasksRepository(connection),
+        )
+    ).process_next()
 
 
 def _run_follow_check(connection: Connection) -> None:
