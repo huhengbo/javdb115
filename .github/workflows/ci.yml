@@ -175,7 +175,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
-      - uses: docker/setup-qemu-action@v4.3.0
+      - uses: docker/setup-qemu-action@v4.4.0
       - name: Build multi-platform image
         uses: docker/build-push-action@v7.3.0
         with:
