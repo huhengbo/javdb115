@@ -24,12 +24,17 @@ from app.repositories.tasks import TasksRepository
 from app.scheduler import IntervalSchedulerService, SchedulerService
 from app.services.download_monitor import DownloadMonitorDependencies, DownloadMonitorService
 from app.services.follow_workflow import FollowWorkflowDependencies, FollowWorkflowService
+from app.services.manual_offline import (
+    ManualOfflineQueueDependencies,
+    ManualOfflineQueueService,
+)
 from app.services.settings import DEFAULT_CHECK_CRON
 from app.services.telegram_commands import TelegramCommandService
 from app.services.telegram_movie_jobs import TelegramMovieJobDependencies, TelegramMovieJobRunner
 
 DOWNLOAD_MONITOR_CRON = "* * * * *"
 TELEGRAM_POLL_INTERVAL_SECONDS = 3
+MANUAL_OFFLINE_QUEUE_INTERVAL_SECONDS = 1
 AppScheduler = SchedulerService | IntervalSchedulerService
 
 
@@ -50,10 +55,25 @@ def create_schedulers(database_path: Path) -> list[AppScheduler]:
             lambda connection: _run_telegram_poll(connection, database_path),
         )
 
+    def manual_offline_queue_job() -> None:
+        _run_db_job(database_path, _run_manual_offline_queue)
+
     check_scheduler = SchedulerService(check_cron_provider, check_job)
     monitor_scheduler = SchedulerService(lambda: DOWNLOAD_MONITOR_CRON, monitor_job)
-    telegram_scheduler = IntervalSchedulerService(TELEGRAM_POLL_INTERVAL_SECONDS, telegram_job)
-    return [check_scheduler, monitor_scheduler, telegram_scheduler]
+    telegram_scheduler = IntervalSchedulerService(
+        TELEGRAM_POLL_INTERVAL_SECONDS,
+        telegram_job,
+    )
+    manual_offline_queue_scheduler = IntervalSchedulerService(
+        MANUAL_OFFLINE_QUEUE_INTERVAL_SECONDS,
+        manual_offline_queue_job,
+    )
+    return [
+        check_scheduler,
+        monitor_scheduler,
+        telegram_scheduler,
+        manual_offline_queue_scheduler,
+    ]
 
 
 def _read_setting(database_path: Path, key: str) -> str | None:
@@ -92,6 +112,17 @@ def _run_download_monitor(connection: Connection) -> None:
             settings=settings_repo,
         )
     ).poll_unfinished()
+
+
+def _run_manual_offline_queue(connection: Connection) -> None:
+    ManualOfflineQueueService(
+        ManualOfflineQueueDependencies(
+            catalog=CatalogRepository(connection),
+            logs=LogsRepository(connection),
+            settings=SettingsRepository(connection),
+            tasks=TasksRepository(connection),
+        )
+    ).process_pending()
 
 
 def _run_follow_check(connection: Connection) -> None:
