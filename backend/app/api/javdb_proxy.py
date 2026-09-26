@@ -15,6 +15,7 @@ from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.tasks import TasksRepository
 from app.services.javdb_movie_bundle import JavdbMovieBundleService
+from app.services.javdb_movie_payload import JavdbMoviePayload
 from app.services.manual_offline import ManualOfflineDependencies, ManualOfflineService
 
 router = APIRouter(prefix="/api/javdb", tags=["javdb"], dependencies=[Depends(require_user)])
@@ -167,7 +168,7 @@ def submit_movie_offline(
     connection: Connection = Depends(get_connection),
     client: JavdbApiClient = Depends(get_client),
 ) -> ManualOfflineResponse:
-    result = ManualOfflineService(
+    service = ManualOfflineService(
         ManualOfflineDependencies(
             actors=ActorsRepository(connection),
             catalog=CatalogRepository(connection),
@@ -176,7 +177,19 @@ def submit_movie_offline(
             tasks=TasksRepository(connection),
             javdb=client,
         )
-    ).submit(movie_id, payload.magnet_hash, force=payload.force)
+    )
+    if payload.detail is not None and payload.magnet is not None:
+        result = service.submit_prefetched(
+            movie_id,
+            payload.magnet_hash,
+            JavdbMoviePayload(
+                detail=dict(payload.detail),
+                magnets=[dict(payload.magnet)],
+            ),
+            force=payload.force,
+        )
+    else:
+        result = service.submit(movie_id, payload.magnet_hash, force=payload.force)
     return ManualOfflineResponse(
         ok=result.task_id is not None,
         task_id=result.task_id,
