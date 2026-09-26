@@ -9,6 +9,7 @@ from uuid import uuid4
 from app.adapters.cloud115 import Cloud115Client
 from app.adapters.cloud115_types import CloudItem
 from app.errors import NotFoundError, ValidationAppError
+from app.services.organizer import SUBTITLE_EXTENSIONS
 
 PLAYBACK_ROOT_NAME = ".play"
 PLAYBACK_TTL = timedelta(hours=6)
@@ -126,14 +127,39 @@ class PlaybackService:
 
     def _resolve(self, session: PlaybackSession, item: CloudItem) -> dict[str, object]:
         session.status = "resolving"
-        session.progress_percent = 96
-        session.message = "正在获取 115 播放地址"
+        session.progress_percent = 94
+        session.message = "正在清理无用文件"
         session.selected_file_id = item.id
+        self._cleanup_unwanted_media(session.session_dir_id, item.id)
+        session.progress_percent = 97
+        session.message = "正在获取 115 播放地址"
         session.play_url = self.cloud.get_download_url(item.id, item.pick_code)
         session.status = "ready"
         session.progress_percent = 100
         session.message = "播放地址已准备完成"
         return self._payload(session)
+
+    def _cleanup_unwanted_media(
+        self,
+        directory_id: str,
+        selected_file_id: str,
+        depth: int = 0,
+    ) -> None:
+        delete_ids: list[str] = []
+        child_directories: list[str] = []
+        for item in self.cloud.list_items(directory_id):
+            if item.is_directory:
+                if depth < MAX_SCAN_DEPTH:
+                    child_directories.append(item.id)
+                continue
+            extension = Path(item.name).suffix.lower()
+            if item.id == selected_file_id or extension in SUBTITLE_EXTENSIONS:
+                continue
+            delete_ids.append(item.id)
+        if delete_ids:
+            self.cloud.delete(delete_ids)
+        for child_id in child_directories:
+            self._cleanup_unwanted_media(child_id, selected_file_id, depth + 1)
 
     def _play_root_id(self) -> str:
         for directory in self.cloud.list_directories(self.download_root_id):
