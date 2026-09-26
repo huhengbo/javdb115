@@ -127,7 +127,7 @@ def test_manual_offline_service_queues_task_without_waiting_for_115(
     connection = setup_manual_database(tmp_path)
     service = ManualOfflineService(manual_dependencies(connection))
 
-    result = service.submit("abc123", "hash-1")
+    result = service.submit("abc123", "hash-1", defer_115=True)
     task = TasksRepository(connection).list_all()[0]
     logs = LogsRepository(connection).list()
     events = TaskEventsRepository(connection).list_for_tasks([int(cast(int, task["id"]))])
@@ -146,7 +146,11 @@ def test_offline_submission_queue_submits_queued_task(
     tmp_path: Path,
 ) -> None:
     connection = setup_manual_database(tmp_path)
-    result = ManualOfflineService(manual_dependencies(connection)).submit("abc123", "hash-1")
+    result = ManualOfflineService(manual_dependencies(connection)).submit(
+        "abc123",
+        "hash-1",
+        defer_115=True,
+    )
     monkeypatch.setattr(
         "app.services.offline_submission_queue.CloudServiceFactory.create",
         lambda self: FakeCloud(),
@@ -168,9 +172,9 @@ def test_manual_offline_duplicate_requires_force(
     connection = setup_manual_database(tmp_path)
     service = ManualOfflineService(manual_dependencies(connection))
 
-    first = service.submit("abc123", "hash-1")
-    duplicate = service.submit("abc123", "hash-1")
-    forced = service.submit("abc123", "hash-1", force=True)
+    first = service.submit("abc123", "hash-1", defer_115=True)
+    duplicate = service.submit("abc123", "hash-1", defer_115=True)
+    forced = service.submit("abc123", "hash-1", force=True, defer_115=True)
     tasks = TasksRepository(connection).list_by_work_code("ABC-123")
 
     assert first.task_id is not None
@@ -198,7 +202,11 @@ def test_manual_offline_keeps_task_when_notification_fails(
         lambda self: FakeCloud(),
     )
 
-    result = ManualOfflineService(manual_dependencies(connection)).submit("abc123", "hash-1")
+    result = ManualOfflineService(manual_dependencies(connection)).submit(
+        "abc123",
+        "hash-1",
+        defer_115=True,
+    )
     OfflineSubmissionQueueService(queue_dependencies(connection)).process_next()
     task = TasksRepository(connection).get_raw(int(cast(int, result.task_id)))
     stages = [str(log["stage"]) for log in LogsRepository(connection).list()]
@@ -215,7 +223,11 @@ def test_task_retry_resubmits_failed_manual_task(
     tmp_path: Path,
 ) -> None:
     connection = setup_manual_database(tmp_path)
-    result = ManualOfflineService(manual_dependencies(connection)).submit("abc123", "hash-1")
+    result = ManualOfflineService(manual_dependencies(connection)).submit(
+        "abc123",
+        "hash-1",
+        defer_115=True,
+    )
     task_id = int(cast(int, result.task_id))
     TasksRepository(connection).update_status(task_id, "failed", "115_submit_failed")
     monkeypatch.setattr(
