@@ -207,10 +207,21 @@ export const client = {
     tagIds.forEach((tagId) => params.append('tag_ids', tagId));
     return api<Movie[]>(`/api/javdb/actors/${id}/movies?${params.toString()}`);
   },
-  submitMovieOffline: (movieId: string, magnetHash: string, force = false) =>
+  submitMovieOffline: (
+    movieId: string,
+    magnetHash: string,
+    force = false,
+    detail?: MovieDetail,
+    magnet?: MagnetItem
+  ) =>
     api<ManualOfflineResult>(`/api/javdb/movies/${movieId}/offline`, {
       method: 'POST',
-      body: JSON.stringify({ magnet_hash: magnetHash, force })
+      body: JSON.stringify({
+        magnet_hash: magnetHash,
+        force,
+        detail: detail ?? null,
+        magnet: magnet ?? null
+      })
     }),
   search: (q: string) => api<Movie[]>(`/api/javdb/search?q=${encodeURIComponent(q)}`),
 };
