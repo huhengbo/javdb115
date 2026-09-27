@@ -156,7 +156,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: docker/setup-buildx-action@v4.3.0
       - name: Build native image for vulnerability scan
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           load: true
@@ -177,7 +177,7 @@ jobs:
           severity: CRITICAL,HIGH
       - uses: docker/setup-qemu-action@v4.3.0
       - name: Build multi-platform image
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
