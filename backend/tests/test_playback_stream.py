@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import timedelta
 from pathlib import Path
 
 import httpx
@@ -14,12 +15,13 @@ from app.config import AppConfig
 from app.database import Database
 from app.dependencies import get_config
 from app.errors import AppError, app_error_handler
+from app.repositories.playback import PlaybackRepository, PlaybackSession
 from app.repositories.settings import SettingsRepository
-from app.services.playback import PlaybackService
-from tests.test_playback import FakeCloud
+from app.security import now_utc
 
 HASH = "c" * 40
 VIDEO = bytes(range(256)) * 4
+PLAY_URL = "/api/playback/stream/stream-token/ABC-123.mkv"
 
 
 class ChunkedStream(httpx.AsyncByteStream):
@@ -33,9 +35,8 @@ class ChunkedStream(httpx.AsyncByteStream):
             yield self.data[start:start + 256]
 
 
-class LinkCloud(FakeCloud):
+class LinkCloud:
     def __init__(self) -> None:
-        super().__init__()
         self.link_requests = 0
 
     def get_download_url(self, file_id: str, pick_code: str | None = None) -> CloudDownloadUrl:
@@ -98,11 +99,20 @@ def stream_env(
     app.dependency_overrides[get_config] = lambda: config
 
     with database.connect() as connection:
-        service = PlaybackService(cloud, "download-root", connection)
-        session_id = str(service.create(f"magnet:?xt=urn:btih:{HASH}")["session_id"])
-        cloud.complete(HASH, [CloudItem("main", "ABC-123.mkv", 3_000_000_000, False, "pc")])
-        play_url = str(service.get(session_id)["play_url"])
-    return TestClient(app), cloud, upstream_requests, play_url
+        now = now_utc()
+        PlaybackRepository(connection).insert(
+            PlaybackSession(
+                id="0123456789abcdef",
+                stream_token="stream-token",
+                created_at=now,
+                expires_at=now + timedelta(hours=1),
+                magnet_hash=HASH,
+                status="ready",
+                files=[CloudItem("main", "ABC-123.mkv", 3_000_000_000, False, "pc")],
+                selected_file_id="main",
+            )
+        )
+    return TestClient(app), cloud, upstream_requests, PLAY_URL
 
 
 def test_stream_forwards_range_and_115_headers(
