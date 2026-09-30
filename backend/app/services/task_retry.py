@@ -13,6 +13,7 @@ from app.repositories.task_events import TaskEventsRepository
 from app.repositories.tasks import TasksRepository
 from app.services.cloud import CloudServiceFactory
 from app.services.notifier import NotificationService
+from app.services.playback import release_playback_sessions
 from app.services.task_state import TaskStateService, TaskTransition
 
 LOGGER = logging.getLogger(__name__)
@@ -65,6 +66,7 @@ class TaskRetryService:
 
     def _submit_to_115(self, work: dict[str, Any], magnet: dict[str, Any]) -> str:
         cloud = CloudServiceFactory(self.settings).create()
+        release_playback_sessions(self.settings.connection, cloud, str(magnet["url"]))
         return cloud.add_offline_url(
             str(magnet["url"]),
             self.settings.require("p115_download_dir_id"),

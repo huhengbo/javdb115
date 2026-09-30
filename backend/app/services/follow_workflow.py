@@ -20,6 +20,7 @@ from app.services.cloud import CloudServiceFactory
 from app.services.javdb_movie_payload import fetch_javdb_movie_payload
 from app.services.magnet_filter import MagnetDecision, MagnetFilter
 from app.services.notifier import NotificationService
+from app.services.playback import release_playback_sessions
 from app.services.settings import SettingsService
 from app.services.task_state import TaskStateService, TaskTransition
 
@@ -304,6 +305,7 @@ class FollowWorkflowService:
     def _submit_to_115(self, work: JavdbWork, magnet: JavdbMagnet) -> str:
         download_dir_id = self.settings.require("p115_download_dir_id")
         cloud = CloudServiceFactory(self.settings).create()
+        release_playback_sessions(self.settings.connection, cloud, magnet.url)
         return cloud.add_offline_url(magnet.url, download_dir_id, savepath=work.code)
 
     def _size_bytes(self, raw_size: object) -> int | None:

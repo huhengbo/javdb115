@@ -15,6 +15,7 @@ from app.repositories.tasks import TasksRepository
 from app.services.cloud import CloudServiceFactory
 from app.services.javdb_movie_payload import JavdbMoviePayload, fetch_javdb_movie_payload
 from app.services.notifier import NotificationService
+from app.services.playback import release_playback_sessions
 from app.services.task_state import TaskStateService, TaskTransition
 
 BYTES_PER_MB = 1024 * 1024
@@ -160,14 +161,12 @@ class ManualOfflineService:
 
     def _submit_to_115(self, task_id: int, work: JavdbWork, magnet: JavdbMagnet) -> str:
         try:
-            return (
-                CloudServiceFactory(self.settings)
-                .create()
-                .add_offline_url(
-                    magnet.url,
-                    self.settings.require("p115_download_dir_id"),
-                    savepath=work.code,
-                )
+            cloud = CloudServiceFactory(self.settings).create()
+            release_playback_sessions(self.settings.connection, cloud, magnet.url)
+            return cloud.add_offline_url(
+                magnet.url,
+                self.settings.require("p115_download_dir_id"),
+                savepath=work.code,
             )
         except Exception as exc:
             self._state().transition(
@@ -345,6 +344,7 @@ class ManualOfflineQueueService:
         magnet: dict[str, Any],
     ) -> str:
         cloud = CloudServiceFactory(self.settings).create()
+        release_playback_sessions(self.settings.connection, cloud, str(magnet["url"]))
         return cloud.add_offline_url(
             str(magnet["url"]),
             self.settings.require("p115_download_dir_id"),

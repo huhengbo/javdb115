@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,13 @@ class CloudOfflineTask:
     message: str | None
     source_dir_name: str | None = None
     download_root_id: str | None = None
+
+
+@dataclass(frozen=True)
+class CloudDownloadUrl:
+    url: str
+    # 115 直链校验请求头（至少 User-Agent 需与获取直链时一致），访问直链时必须原样携带
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
