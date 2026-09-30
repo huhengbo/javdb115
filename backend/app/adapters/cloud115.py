@@ -6,6 +6,7 @@ from typing import Any
 
 from app.adapters.cloud115_types import (
     CloudDirectory,
+    CloudDownloadUrl,
     CloudItem,
     CloudOfflineTask,
     P115AccountInfo,
@@ -54,7 +55,10 @@ class Cloud115Client:
     def get_offline_tasks(self, task_ids: set[str]) -> dict[str, CloudOfflineTask]:
         raise NotImplementedError
 
-    def get_download_url(self, file_id: str, pick_code: str | None = None) -> str:
+    def list_offline_tasks(self) -> list[CloudOfflineTask]:
+        raise NotImplementedError
+
+    def get_download_url(self, file_id: str, pick_code: str | None = None) -> CloudDownloadUrl:
         raise NotImplementedError
 
     def delete_offline_task(self, task_id: str) -> None:
@@ -142,7 +146,14 @@ class P115CloudClient(Cloud115Client):
                     return found
         return found
 
-    def get_download_url(self, file_id: str, pick_code: str | None = None) -> str:
+    def list_offline_tasks(self) -> list[CloudOfflineTask]:
+        return [
+            self._to_offline_task(item, status)
+            for remote_stat, status in OFFLINE_STATUS_QUERIES
+            for item in self._iter_offline_items(remote_stat)
+        ]
+
+    def get_download_url(self, file_id: str, pick_code: str | None = None) -> CloudDownloadUrl:
         try:
             resolved_pick_code = pick_code or str(self.client.to_pickcode(file_id))
             result = self.client.download_url(resolved_pick_code)
@@ -151,7 +162,7 @@ class P115CloudClient(Cloud115Client):
         url = str(result or "").strip()
         if not url:
             raise IntegrationError("115 playback URL response was empty")
-        return url
+        return CloudDownloadUrl(url, self._download_headers(result))
 
     def delete_offline_task(self, task_id: str) -> None:
         result = self._call(
@@ -188,6 +199,15 @@ class P115CloudClient(Cloud115Client):
         except Exception as exc:
             raise IntegrationError(f"115 metadata upload failed: {filename}") from exc
         self._raise_if_response_failed("upload_file", result)
+
+    def _download_headers(self, result: Any) -> dict[str, str]:
+        # p115client 返回的 P115URL 带有获取直链时使用的请求头（如空 User-Agent）
+        getter = getattr(result, "get", None)
+        raw_headers = getter("headers") if callable(getter) else None
+        headers = {"user-agent": ""}
+        if isinstance(raw_headers, dict):
+            headers.update({str(key).lower(): str(value) for key, value in raw_headers.items()})
+        return headers
 
     def _iter_offline_items(self, remote_stat: int) -> Iterator[dict[str, Any]]:
         page = 1

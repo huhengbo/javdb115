@@ -57,6 +57,35 @@ def _migration_002_secret_flags(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_003_playback_sessions(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS playback_sessions (
+            id TEXT PRIMARY KEY,
+            magnet_hash TEXT,
+            task_id TEXT,
+            owned INTEGER NOT NULL DEFAULT 1,
+            play_root_id TEXT,
+            session_dir_id TEXT,
+            status TEXT NOT NULL,
+            message TEXT NOT NULL,
+            progress_percent INTEGER NOT NULL DEFAULT 5,
+            files_json TEXT NOT NULL DEFAULT '[]',
+            selected_file_id TEXT,
+            stream_token TEXT NOT NULL UNIQUE,
+            cleanup_error TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_playback_sessions_magnet_hash "
+        "ON playback_sessions(magnet_hash)"
+    )
+
+
 def _ensure_task_events_table(connection: sqlite3.Connection) -> None:
     connection.execute(
         """
@@ -159,4 +188,5 @@ def _column_exists(connection: sqlite3.Connection, table_name: str, column_name:
 MIGRATIONS: tuple[Migration, ...] = (
     (1, "legacy-schema-baseline", _migration_001_legacy_schema),
     (2, "mark-known-secrets", _migration_002_secret_flags),
+    (3, "playback-sessions", _migration_003_playback_sessions),
 )

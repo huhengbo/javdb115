@@ -67,8 +67,8 @@ def test_legacy_database_is_upgraded_and_versioned(tmp_path: Path) -> None:
         assert "cloud_file_name" in task_columns
         assert "last_checked_at" in follow_columns
         assert secret is not None and int(secret["is_secret"]) == 1
-        assert versions == [1, 2]
-        assert current_schema_version(connection) == 2
+        assert versions == [1, 2, 3]
+        assert current_schema_version(connection) == 3
 
 
 def test_migrations_are_idempotent(tmp_path: Path) -> None:
@@ -78,4 +78,4 @@ def test_migrations_are_idempotent(tmp_path: Path) -> None:
 
     with database.connect() as connection:
         count = connection.execute("SELECT COUNT(*) AS count FROM schema_migrations").fetchone()
-        assert count is not None and int(count["count"]) == 2
+        assert count is not None and int(count["count"]) == 3

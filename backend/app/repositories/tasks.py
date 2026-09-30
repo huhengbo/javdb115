@@ -176,6 +176,19 @@ class TasksRepository:
         )
         return tasks[0] if tasks else None
 
+    def find_latest_by_cloud_task_id(self, cloud_task_id: str) -> dict[str, Any] | None:
+        row = self.connection.execute(
+            """
+            SELECT id, status, cloud_task_id, cloud_file_id
+            FROM tasks
+            WHERE lower(cloud_task_id) = lower(?)
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (cloud_task_id,),
+        ).fetchone()
+        return None if row is None else dict(row)
+
     def _list_tasks(
         self,
         where_sql: str,

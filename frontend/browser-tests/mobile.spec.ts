@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { URL } from 'node:url';
 
 const latestMovie = movie('latest-1', 'ABC-001', '最新作品');
@@ -149,6 +150,79 @@ test('reduced motion and PWA manifest contracts are active in the real browser b
   expect(manifest.start_url).toBe('/');
   expect(manifest.icons.some((icon: { sizes?: string; purpose?: string }) => icon.sizes === '512x512' && icon.purpose === 'maskable')).toBeTruthy();
 });
+
+test('online playback polls through transient errors and plays in the page player', async ({ page }) => {
+  // Playwright 自带的 Chromium 不含 H.264 解码器，这里用 WebM 样片验证播放器交互
+  const video = readFileSync(new URL('./fixtures/sample.webm', import.meta.url));
+  let polls = 0;
+  const playbackRequests: string[] = [];
+  await page.route('**/api/javdb/movies/latest-1/bundle', (route) => json(route, {
+    detail: { ...latestMovie, actors: [], tags: [], relative_movies: [], actor_movies: [] },
+    magnets: [{ name: 'ABC-001.webm', hash: 'a'.repeat(40), size: 1.2, cnsub: false, hd: true, created_at: '2026-09-01' }],
+    reviews: [],
+    reviews_error: null
+  }));
+  await page.route('**/api/tasks/by-work/**', (route) => json(route, []));
+  await page.route('**/api/tools/playback**', async (route) => {
+    playbackRequests.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
+    if (route.request().method() === 'POST') return json(route, playbackSession('offline_waiting'));
+    polls += 1;
+    if (polls === 1) return json(route, { error: { code: 'integration_error', message: '115 暂时不可用' } }, 502);
+    return json(route, playbackSession('ready'));
+  });
+  await page.route('**/api/playback/stream/**', (route) => route.fulfill({
+    status: 200,
+    headers: { 'content-type': 'video/webm', 'accept-ranges': 'bytes' },
+    body: video
+  }));
+
+  await page.goto('/discovery');
+  await page.getByText('ABC-001').click();
+  await page.getByRole('button', { name: '在线播放' }).click();
+  const dialog = page.getByRole('dialog', { name: '在线播放' });
+  await expect(dialog.getByText('正在准备在线播放')).toBeVisible();
+  await expect(dialog.getByText('播放已准备好')).toBeVisible({ timeout: 15_000 });
+  expect(polls).toBe(2);
+  expect(playbackRequests[0]).toBe('POST /api/tools/playback');
+
+  await dialog.getByRole('button', { name: '立即播放' }).click();
+  const player = page.getByRole('dialog', { name: '播放 ABC-001.webm' });
+  await expect(player).toBeVisible();
+  const element = player.locator('video');
+  await expect.poll(() => element.evaluate((node: HTMLVideoElement) => node.duration)).toBeGreaterThan(20);
+  await element.evaluate((node: HTMLVideoElement) => node.pause());
+
+  await player.getByRole('button', { name: '快进 10 秒' }).click();
+  await expect.poll(() => element.evaluate((node: HTMLVideoElement) => node.currentTime)).toBeGreaterThanOrEqual(10);
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => element.evaluate((node: HTMLVideoElement) => node.currentTime)).toBeLessThan(10);
+  await player.getByLabel('播放倍速').selectOption('2');
+  expect(await element.evaluate((node: HTMLVideoElement) => node.playbackRate)).toBe(2);
+  await player.getByRole('button', { name: '全屏' }).click();
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+  await player.getByRole('button', { name: '退出全屏' }).click();
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+
+  await player.getByRole('button', { name: '关闭播放' }).click();
+  await expect(player).toHaveCount(0);
+  await expect(dialog.getByText('播放已准备好')).toBeVisible();
+  expect(await page.evaluate(() => window.localStorage.getItem('javdb115.playback.speed'))).toBe('2');
+});
+
+function playbackSession(status: 'offline_waiting' | 'ready') {
+  const file = { id: 'file-1', name: 'ABC-001.webm', size: 75_896 };
+  return {
+    session_id: 'session-1',
+    task_id: 'a'.repeat(40),
+    status,
+    message: status === 'ready' ? '播放地址已准备完成' : '115 离线中 · 30%',
+    progress_percent: status === 'ready' ? 100 : 30,
+    expires_at: '2026-10-01T00:00:00+00:00',
+    files: status === 'ready' ? [file] : [],
+    file: status === 'ready' ? file : null,
+    play_url: status === 'ready' ? '/api/playback/stream/token-1/ABC-001.webm' : null
+  };
+}
 
 async function mockApi(page: Page) {
   await page.route('**/api/**', async (route) => handleApi(route));

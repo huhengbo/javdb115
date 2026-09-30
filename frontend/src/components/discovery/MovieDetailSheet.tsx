@@ -1,6 +1,6 @@
 import { ArrowLeft, Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { client } from '../../api';
+import { useEffect, useRef, useState } from 'react';
+import { ApiError, client } from '../../api';
 import type { MagnetItem, MovieDetail, MovieReview, PlaybackSession, Task, TaskHistoryItem } from '../../types';
 import type { ActorRef } from '../../lib/javdb';
 import { formatMagnetSize } from '../../lib/javdb';
@@ -13,6 +13,11 @@ import { MovieTaskHistory, taskSummary } from './MovieTaskHistory';
 import { PreviewGrid } from './PreviewGrid';
 import { PlaybackDialog } from './PlaybackDialog';
 import { SimilarMovies } from './SimilarMovies';
+
+const PLAYBACK_POLL_MS = 2000;
+const PLAYBACK_POLL_MAX_MS = 15000;
+const PLAYBACK_MAX_POLL_FAILURES = 6;
+const PLAYBACK_POLLING_STATUSES = ['submitting', 'offline_waiting', 'locating', 'resolving'];
 
 type Props = {
   readonly isTop?: boolean;
@@ -41,6 +46,12 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
   const [playbackOpen, setPlaybackOpen] = useState(false);
   const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [playbackSelecting, setPlaybackSelecting] = useState(false);
+  const [playbackPollTick, setPlaybackPollTick] = useState(0);
+  // 每次发起、重试或关闭播放都会递增，用于丢弃过期请求的返回结果
+  const playbackRequestRef = useRef(0);
+  const playbackPollFailuresRef = useRef(0);
+  const playbackMagnetRef = useRef<MagnetItem | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,9 +64,7 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
     setTaskHistory([]);
     setReviewsError(null);
     setTaskHistoryError(null);
-    setPlaybackOpen(false);
-    setPlaybackSession(null);
-    setPlaybackError(null);
+    resetPlayback();
     loadMovieDetail(movieId)
       .then(({ movieDetail, movieMagnets, movieReviews, movieReviewsError }) => {
         if (cancelled) return;
@@ -82,38 +91,71 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
   }, [isTop]);
 
   useEffect(() => {
-    if (!playbackOpen || !playbackSession) return;
-    if (!['submitting', 'offline_waiting', 'locating', 'resolving'].includes(playbackSession.status)) return;
+    if (!playbackOpen || !playbackSession || playbackError) return;
+    if (!PLAYBACK_POLLING_STATUSES.includes(playbackSession.status)) return;
+    const request = playbackRequestRef.current;
+    const failures = playbackPollFailuresRef.current;
+    const delay = Math.min(PLAYBACK_POLL_MS * 2 ** failures, PLAYBACK_POLL_MAX_MS);
     const timer = window.setTimeout(() => {
       client.playback(playbackSession.session_id)
         .then((result) => {
+          if (request !== playbackRequestRef.current) return;
+          playbackPollFailuresRef.current = 0;
           setPlaybackSession(result);
-          setPlaybackError(null);
         })
-        .catch((err: Error) => setPlaybackError(err.message));
-    }, 1200);
+        .catch((err: Error) => {
+          if (request !== playbackRequestRef.current) return;
+          playbackPollFailuresRef.current += 1;
+          // 会话已不存在时立即停止；网络抖动则退避重试，连续失败多次才提示
+          const gone = err instanceof ApiError && err.status === 404;
+          if (gone || playbackPollFailuresRef.current >= PLAYBACK_MAX_POLL_FAILURES) {
+            setPlaybackError(err.message);
+          } else {
+            setPlaybackPollTick((tick) => tick + 1);
+          }
+        });
+    }, delay);
     return () => window.clearTimeout(timer);
-  }, [playbackOpen, playbackSession]);
+  }, [playbackOpen, playbackSession, playbackError, playbackPollTick]);
+
+  function resetPlayback() {
+    playbackRequestRef.current += 1;
+    playbackPollFailuresRef.current = 0;
+    setPlaybackOpen(false);
+    setPlaybackSession(null);
+    setPlaybackError(null);
+    setPlaybackSelecting(false);
+  }
 
   async function startPlayback(magnet: MagnetItem) {
+    const request = ++playbackRequestRef.current;
+    playbackMagnetRef.current = magnet;
+    playbackPollFailuresRef.current = 0;
     setPlaybackOpen(true);
     setPlaybackSession(null);
     setPlaybackError(null);
+    setPlaybackSelecting(false);
     try {
       const url = magnet.url || `magnet:?xt=urn:btih:${magnet.hash}&dn=${encodeURIComponent(magnet.name)}`;
-      setPlaybackSession(await client.createPlayback(url));
+      const session = await client.createPlayback(url);
+      if (request === playbackRequestRef.current) setPlaybackSession(session);
     } catch (err) {
-      setPlaybackError((err as Error).message);
+      if (request === playbackRequestRef.current) setPlaybackError((err as Error).message);
     }
   }
 
   async function selectPlaybackFile(fileId: string) {
-    if (!playbackSession) return;
+    if (!playbackSession || playbackSelecting) return;
+    const request = playbackRequestRef.current;
+    setPlaybackSelecting(true);
     setPlaybackError(null);
     try {
-      setPlaybackSession(await client.selectPlaybackFile(playbackSession.session_id, fileId));
+      const session = await client.selectPlaybackFile(playbackSession.session_id, fileId);
+      if (request === playbackRequestRef.current) setPlaybackSession(session);
     } catch (err) {
-      setPlaybackError((err as Error).message);
+      if (request === playbackRequestRef.current) setPlaybackError((err as Error).message);
+    } finally {
+      if (request === playbackRequestRef.current) setPlaybackSelecting(false);
     }
   }
 
@@ -202,10 +244,9 @@ export function MovieDetailSheet({ isTop = true, movieId, onClose, onOpenActor, 
         <PlaybackDialog
           error={playbackError}
           session={playbackSession}
-          onClose={() => {
-            setPlaybackOpen(false);
-            setPlaybackError(null);
-          }}
+          selecting={playbackSelecting}
+          onClose={resetPlayback}
+          onRetry={() => { if (playbackMagnetRef.current) void startPlayback(playbackMagnetRef.current); }}
           onSelectFile={(fileId) => void selectPlaybackFile(fileId)}
         />
       ) : null}

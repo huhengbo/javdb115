@@ -11,7 +11,18 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse, Response
 
 from app.adapters.javdb_api import client_from_token
-from app.api import auth, checks, follows, health, image_proxy, javdb_proxy, settings, tasks, tools
+from app.api import (
+    auth,
+    checks,
+    follows,
+    health,
+    image_proxy,
+    javdb_proxy,
+    playback_stream,
+    settings,
+    tasks,
+    tools,
+)
 from app.config import load_config
 from app.database import Database
 from app.errors import AppError, app_error_handler
@@ -22,12 +33,14 @@ from app.repositories.logs import LogsRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.tasks import TasksRepository
 from app.scheduler import IntervalSchedulerService, SchedulerService
+from app.services.cloud import CloudServiceFactory
 from app.services.download_monitor import DownloadMonitorDependencies, DownloadMonitorService
 from app.services.follow_workflow import FollowWorkflowDependencies, FollowWorkflowService
 from app.services.manual_offline import (
     ManualOfflineQueueDependencies,
     ManualOfflineQueueService,
 )
+from app.services.playback import PlaybackService
 from app.services.settings import DEFAULT_CHECK_CRON
 from app.services.telegram_commands import TelegramCommandService
 from app.services.telegram_movie_jobs import TelegramMovieJobDependencies, TelegramMovieJobRunner
@@ -35,6 +48,7 @@ from app.services.telegram_movie_jobs import TelegramMovieJobDependencies, Teleg
 DOWNLOAD_MONITOR_CRON = "* * * * *"
 TELEGRAM_POLL_INTERVAL_SECONDS = 3
 MANUAL_OFFLINE_QUEUE_INTERVAL_SECONDS = 1
+PLAYBACK_CLEANUP_INTERVAL_SECONDS = 10 * 60
 AppScheduler = SchedulerService | IntervalSchedulerService
 
 
@@ -58,6 +72,16 @@ def create_schedulers(database_path: Path) -> list[AppScheduler]:
     def manual_offline_queue_job() -> None:
         _run_db_job(database_path, _run_manual_offline_queue)
 
+    orphan_sweep_done = False
+
+    def playback_cleanup_job() -> None:
+        nonlocal orphan_sweep_done
+        # 孤儿目录只来自旧版本内存会话，每次启动后成功扫描一次即可
+        orphan_sweep_done = _with_connection(
+            database_path,
+            lambda connection: _run_playback_cleanup(connection, not orphan_sweep_done),
+        ) or orphan_sweep_done
+
     check_scheduler = SchedulerService(check_cron_provider, check_job)
     monitor_scheduler = SchedulerService(lambda: DOWNLOAD_MONITOR_CRON, monitor_job)
     telegram_scheduler = IntervalSchedulerService(
@@ -68,11 +92,16 @@ def create_schedulers(database_path: Path) -> list[AppScheduler]:
         MANUAL_OFFLINE_QUEUE_INTERVAL_SECONDS,
         manual_offline_queue_job,
     )
+    playback_cleanup_scheduler = IntervalSchedulerService(
+        PLAYBACK_CLEANUP_INTERVAL_SECONDS,
+        playback_cleanup_job,
+    )
     return [
         check_scheduler,
         monitor_scheduler,
         telegram_scheduler,
         manual_offline_queue_scheduler,
+        playback_cleanup_scheduler,
     ]
 
 
@@ -123,6 +152,22 @@ def _run_manual_offline_queue(connection: Connection) -> None:
             tasks=TasksRepository(connection),
         )
     ).process_pending()
+
+
+def _run_playback_cleanup(connection: Connection, sweep_orphans: bool) -> bool:
+    settings_repo = SettingsRepository(connection)
+    download_root_id = settings_repo.get("p115_download_dir_id")
+    if not download_root_id or not settings_repo.get("p115_cookie"):
+        return False
+    service = PlaybackService(
+        CloudServiceFactory(settings_repo).create(),
+        download_root_id,
+        connection,
+    )
+    service.cleanup_due()
+    if sweep_orphans:
+        service.cleanup_orphan_directories()
+    return sweep_orphans
 
 
 def _run_follow_check(connection: Connection) -> None:
@@ -217,6 +262,7 @@ app.include_router(settings.router)
 app.include_router(tasks.router)
 app.include_router(checks.router)
 app.include_router(tools.router)
+app.include_router(playback_stream.router)
 
 STATIC_DIR = Path(__file__).with_name("static")
 ROOT_STATIC_FILES = frozenset(
