@@ -1,4 +1,4 @@
-import { Loader2, Maximize, Minimize, Pause, Play, RotateCcw, RotateCw, X } from 'lucide-react';
+import { FastForward, Loader2, Maximize, Minimize, Pause, Play, RotateCcw, RotateCw, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
@@ -6,6 +6,11 @@ const SEEK_SECONDS = 10;
 const SPEED_STORAGE_KEY = 'javdb115.playback.speed';
 const CONTROLS_HIDE_MS = 3000;
 const DOUBLE_TAP_MS = 300;
+const SWIPE_THRESHOLD_PX = 10;
+// 横滑满整个画面对应的秒数；长片不按总时长换算，避免手指一动就跳十几秒
+const SWIPE_FULL_WIDTH_SECONDS = 300;
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SPEED = 2;
 
 type Props = {
   readonly src: string;
@@ -16,6 +21,20 @@ type Props = {
 // iOS Safari 的 iPhone 不支持元素全屏，只能让 video 进入系统全屏
 type WebkitVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
 type LockableOrientation = ScreenOrientation & { lock?: (orientation: string) => Promise<void> };
+type Gesture = {
+  readonly pointerId: number;
+  readonly startX: number;
+  readonly startY: number;
+  readonly startTime: number;
+  readonly width: number;
+  active: boolean;
+  // 竖向拖动过的指针既不拖进度，也不算作点击
+  vertical: boolean;
+  // 已触发长按：松手不算点击；boosted 表示长按期间临时倍速中
+  held: boolean;
+  boosted: boolean;
+  target: number;
+};
 
 export function VideoPlayer({ src, title, onClose }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -23,6 +42,8 @@ export function VideoPlayer({ src, title, onClose }: Props) {
   const hideTimerRef = useRef<number | undefined>(undefined);
   const hintTimerRef = useRef<number | undefined>(undefined);
   const lastTapRef = useRef(0);
+  const gestureRef = useRef<Gesture | null>(null);
+  const pressTimerRef = useRef<number | undefined>(undefined);
   const [playing, setPlaying] = useState(false);
   const [buffering, setBuffering] = useState(true);
   const [current, setCurrent] = useState(0);
@@ -31,6 +52,8 @@ export function VideoPlayer({ src, title, onClose }: Props) {
   const [fullscreen, setFullscreen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [seekHint, setSeekHint] = useState<string | null>(null);
+  const [boosting, setBoosting] = useState(false);
+  const [scrub, setScrub] = useState<{ readonly from: number; readonly to: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -92,7 +115,93 @@ export function VideoPlayer({ src, title, onClose }: Props) {
     window.localStorage.setItem(SPEED_STORAGE_KEY, String(value));
   }
 
+  function handleSurfacePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    const video = videoRef.current;
+    if (!video || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    const gesture: Gesture = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startTime: video.currentTime,
+      width: event.currentTarget.getBoundingClientRect().width,
+      active: false,
+      vertical: false,
+      held: false,
+      boosted: false,
+      target: video.currentTime
+    };
+    gestureRef.current = gesture;
+    const surface = event.currentTarget;
+    window.clearTimeout(pressTimerRef.current);
+    // 长按期间临时 2 倍速，松手恢复；暂停时长按不做任何事
+    pressTimerRef.current = window.setTimeout(() => {
+      if (gestureRef.current !== gesture || gesture.active || gesture.vertical) return;
+      gesture.held = true;
+      if (video.paused) return;
+      gesture.boosted = true;
+      surface.setPointerCapture(gesture.pointerId);
+      video.playbackRate = LONG_PRESS_SPEED;
+      setBoosting(true);
+    }, LONG_PRESS_MS);
+  }
+
+  function endBoost() {
+    if (videoRef.current) videoRef.current.playbackRate = speed;
+    setBoosting(false);
+  }
+
+  // 横向滑动画面拖动进度：过程中只预览时间，松手后再 seek，避免每一帧都让服务器重新请求 115
+  function handleSurfacePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId || gesture.vertical || gesture.held || !duration) return;
+    const dx = event.clientX - gesture.startX;
+    if (!gesture.active) {
+      const dy = event.clientY - gesture.startY;
+      if (Math.abs(dy) > SWIPE_THRESHOLD_PX && Math.abs(dy) > Math.abs(dx)) {
+        gesture.vertical = true;
+        window.clearTimeout(pressTimerRef.current);
+        return;
+      }
+      if (Math.abs(dx) < SWIPE_THRESHOLD_PX) return;
+      gesture.active = true;
+      window.clearTimeout(pressTimerRef.current);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      window.clearTimeout(hideTimerRef.current);
+      setControlsVisible(true);
+    }
+    const range = Math.min(duration, SWIPE_FULL_WIDTH_SECONDS);
+    gesture.target = Math.max(0, Math.min(duration, gesture.startTime + (dx / gesture.width) * range));
+    setScrub({ from: gesture.startTime, to: gesture.target });
+  }
+
+  function cancelGesture() {
+    window.clearTimeout(pressTimerRef.current);
+    if (gestureRef.current?.boosted) endBoost();
+    gestureRef.current = null;
+    setScrub(null);
+  }
+
   function handleSurfacePointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    window.clearTimeout(pressTimerRef.current);
+    const gesture = gestureRef.current;
+    gestureRef.current = null;
+    if (gesture?.held) {
+      if (gesture.boosted) endBoost();
+      lastTapRef.current = 0;
+      return;
+    }
+    if (gesture?.vertical) return;
+    if (gesture?.active) {
+      const video = videoRef.current;
+      if (video) {
+        video.currentTime = gesture.target;
+        setCurrent(gesture.target);
+      }
+      setScrub(null);
+      lastTapRef.current = 0;
+      showControls();
+      return;
+    }
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     const now = event.timeStamp;
     const isDouble = now - lastTapRef.current < DOUBLE_TAP_MS;
@@ -157,6 +266,7 @@ export function VideoPlayer({ src, title, onClose }: Props) {
     return () => {
       window.clearTimeout(hideTimerRef.current);
       window.clearTimeout(hintTimerRef.current);
+      window.clearTimeout(pressTimerRef.current);
       // 主动断开视频流，避免关闭后浏览器继续经服务器拉取 115 数据
       if (video) {
         video.pause();
@@ -166,7 +276,8 @@ export function VideoPlayer({ src, title, onClose }: Props) {
     };
   }, []);
 
-  const visible = controlsVisible || !playing || Boolean(error);
+  const visible = controlsVisible || !playing || Boolean(error) || scrub !== null;
+  const shownTime = scrub?.to ?? current;
 
   return (
     <div
@@ -202,19 +313,40 @@ export function VideoPlayer({ src, title, onClose }: Props) {
         onWaiting={() => setBuffering(true)}
         onPlaying={() => setBuffering(false)}
         onCanPlay={() => setBuffering(false)}
-        onRateChange={(event) => setSpeed(event.currentTarget.playbackRate)}
+        onRateChange={(event) => {
+          // 长按的临时倍速不写回所选倍速
+          if (!gestureRef.current?.boosted) setSpeed(event.currentTarget.playbackRate);
+        }}
         onError={(event) => {
           setBuffering(false);
           setError(mediaErrorMessage(event.currentTarget.error));
         }}
       />
 
-      <div className="absolute inset-0" onPointerUp={handleSurfacePointerUp} aria-hidden="true" />
+      <div
+        className="absolute inset-0 touch-none [-webkit-touch-callout:none]"
+        onContextMenu={(event) => event.preventDefault()}
+        onPointerDown={handleSurfacePointerDown}
+        onPointerMove={handleSurfacePointerMove}
+        onPointerUp={handleSurfacePointerUp}
+        onPointerCancel={cancelGesture}
+        aria-hidden="true"
+      />
 
+      {boosting ? (
+        <div className="pointer-events-none absolute top-[calc(4.5rem+env(safe-area-inset-top))] flex items-center gap-1.5 rounded-full bg-black/60 px-4 py-2 text-sm text-white" role="status">
+          <FastForward size={16} />{LONG_PRESS_SPEED}x 倍速播放中
+        </div>
+      ) : null}
       {buffering && !error ? (
         <Loader2 className="pointer-events-none absolute animate-spin text-white/80" size={44} aria-label="缓冲中" />
       ) : null}
-      {seekHint ? (
+      {scrub ? (
+        <div className="pointer-events-none absolute rounded-xl bg-black/60 px-5 py-3 text-center text-white tabular-nums" role="status">
+          <p className="text-lg font-semibold">{formatTime(scrub.to)} / {formatTime(duration)}</p>
+          <p className="mt-0.5 text-xs text-white/75">{formatDelta(scrub.to - scrub.from)}</p>
+        </div>
+      ) : seekHint ? (
         <div className="pointer-events-none absolute rounded-full bg-black/60 px-4 py-2 text-sm text-white" role="status">{seekHint}</div>
       ) : null}
       {error ? (
@@ -234,14 +366,14 @@ export function VideoPlayer({ src, title, onClose }: Props) {
       <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-10 text-white transition-opacity ${visible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
         {notice ? <p className="mb-2 text-xs text-amber-200">{notice}</p> : null}
         <div className="flex items-center gap-3 text-xs tabular-nums">
-          <span>{formatTime(current)}</span>
+          <span>{formatTime(shownTime)}</span>
           <input
             className="h-1 min-w-0 flex-1 cursor-pointer accent-brand"
             type="range"
             min={0}
             max={duration || 0}
             step={0.1}
-            value={Math.min(current, duration || 0)}
+            value={Math.min(shownTime, duration || 0)}
             disabled={!duration}
             aria-label="播放进度"
             onChange={(event) => {
@@ -306,6 +438,11 @@ function formatTime(seconds: number): string {
   const minutes = Math.floor((total % 3600) / 60);
   const secs = String(total % 60).padStart(2, '0');
   return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${secs}` : `${minutes}:${secs}`;
+}
+
+function formatDelta(seconds: number): string {
+  const text = formatTime(Math.abs(seconds));
+  return seconds < 0 ? `快退 ${text}` : `快进 ${text}`;
 }
 
 function mediaErrorMessage(error: MediaError | null): string {

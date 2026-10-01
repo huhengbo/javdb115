@@ -196,6 +196,47 @@ test('online playback polls through transient errors and plays in the page playe
   await expect.poll(() => element.evaluate((node: HTMLVideoElement) => node.currentTime)).toBeGreaterThanOrEqual(10);
   await page.keyboard.press('ArrowLeft');
   await expect.poll(() => element.evaluate((node: HTMLVideoElement) => node.currentTime)).toBeLessThan(10);
+
+  // 横向滑动画面拖动进度：30 秒样片滑过半个画面约快进 15 秒，松手才跳转且不触发暂停/播放
+  const box = (await player.boundingBox())!;
+  const startTime = await element.evaluate((node: HTMLVideoElement) => node.currentTime);
+  const middleY = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width * 0.3, middleY);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.8, middleY, { steps: 8 });
+  await expect(player.getByRole('status')).toContainText(/快进 0:1[45]/);
+  expect(await element.evaluate((node: HTMLVideoElement) => node.currentTime)).toBe(startTime);
+  await page.mouse.up();
+  await expect(player.getByRole('status')).toHaveCount(0);
+  const swiped = await element.evaluate((node: HTMLVideoElement) => node.currentTime);
+  expect(swiped - startTime).toBeGreaterThan(13);
+  expect(swiped - startTime).toBeLessThan(17);
+  expect(await element.evaluate((node: HTMLVideoElement) => node.paused)).toBe(true);
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 5, box.y + box.height * 0.7, { steps: 8 });
+  await page.mouse.up();
+  expect(await element.evaluate((node: HTMLVideoElement) => node.currentTime)).toBe(swiped);
+  await element.evaluate((node: HTMLVideoElement) => node.pause());
+
+  // 长按：暂停时无反应；播放中临时 2 倍速，松手恢复所选倍速且继续播放
+  const center = { x: box.x + box.width / 2, y: middleY };
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down();
+  await page.waitForTimeout(800);
+  await page.mouse.up();
+  expect(await element.evaluate((node: HTMLVideoElement) => [node.paused, node.playbackRate])).toEqual([true, 1]);
+  await element.evaluate((node: HTMLVideoElement) => node.play());
+  await page.mouse.down();
+  await expect(player.getByRole('status')).toContainText('2x 倍速播放中');
+  expect(await element.evaluate((node: HTMLVideoElement) => node.playbackRate)).toBe(2);
+  await expect(player.getByLabel('播放倍速')).toHaveValue('1');
+  await page.mouse.up();
+  await expect(player.getByRole('status')).toHaveCount(0);
+  expect(await element.evaluate((node: HTMLVideoElement) => [node.paused, node.playbackRate])).toEqual([false, 1]);
+  await element.evaluate((node: HTMLVideoElement) => node.pause());
+
   await player.getByLabel('播放倍速').selectOption('2');
   expect(await element.evaluate((node: HTMLVideoElement) => node.playbackRate)).toBe(2);
   await player.getByRole('button', { name: '全屏' }).click();

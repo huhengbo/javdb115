@@ -55,13 +55,22 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     throw new ApiError(
       response.status,
       payload?.error?.code ?? 'http_error',
-      payload?.error?.message ?? `HTTP ${response.status}`
+      payload?.error?.message ?? detailMessage(payload?.detail) ?? `HTTP ${response.status}`
     );
   }
   if (payload === null) {
     throw new Error(`Invalid JSON response: ${path}`);
   }
   return payload as T;
+}
+
+// FastAPI 请求体校验失败时返回 { detail: [{ loc, msg }] }，不走统一的 error 结构
+function detailMessage(detail: unknown): string | undefined {
+  if (typeof detail === 'string') return detail;
+  if (!Array.isArray(detail) || detail.length === 0) return undefined;
+  const first = detail[0] as { loc?: unknown[]; msg?: string };
+  const field = Array.isArray(first.loc) ? first.loc.filter((part) => part !== 'body').join('.') : '';
+  return `请求参数无效${field ? `（${field}）` : ''}：${first.msg ?? '格式不正确'}`;
 }
 
 export function login(username: string, password: string): Promise<{ username: string }> {
