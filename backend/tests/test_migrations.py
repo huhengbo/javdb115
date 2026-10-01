@@ -66,7 +66,8 @@ def test_legacy_database_is_upgraded_and_versioned(tmp_path: Path) -> None:
 
         assert "cloud_file_name" in task_columns
         assert "last_checked_at" in follow_columns
-        assert secret is not None and int(secret["is_secret"]) == 1
+        # 迁移 v2 曾把 p115_cookie 标为密钥，启动时会还原为可回显的普通设置
+        assert secret is not None and int(secret["is_secret"]) == 0
         assert versions == [1, 2, 3]
         assert current_schema_version(connection) == 3
 

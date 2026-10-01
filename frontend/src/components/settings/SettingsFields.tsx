@@ -26,13 +26,13 @@ export function SettingsGroup(props: { readonly caption?: string; readonly child
 }
 
 export function CookieField(props: FieldProps) {
-  return <TextAreaField fieldKey="p115_cookie" label="115 Cookie" placeholder="输入新值以设置或覆盖现有 Cookie" rowsClassName="min-h-24" values={props.values} onChange={props.onChange} />;
+  return <TextAreaField fieldKey="p115_cookie" label="115 Cookie" placeholder="粘贴 115 Cookie，或使用下方扫码登录自动填入" rowsClassName="min-h-24" values={props.values} onChange={props.onChange} />;
 }
 
 export function TelegramFields(props: FieldProps) {
   return (
     <div className="grid gap-4">
-      <TextAreaField fieldKey="telegram_bot_token" label="Bot Token" placeholder="输入新值以设置或覆盖现有 Token" rowsClassName="min-h-16" values={props.values} onChange={props.onChange} />
+      <TextAreaField fieldKey="telegram_bot_token" label="Bot Token" placeholder="输入新值以设置或覆盖现有 Token" rowsClassName="min-h-16" secret values={props.values} onChange={props.onChange} />
       <SingleLineField fieldKey="telegram_chat_id" label="Chat ID（可空）" values={props.values} onChange={props.onChange} />
     </div>
   );
@@ -67,12 +67,12 @@ type FilterRules = {
   readonly excluded_keywords: string[];
 };
 
-function TextAreaField(props: FieldProps & { readonly fieldKey: string; readonly label: string; readonly placeholder?: string; readonly rowsClassName: string }) {
+function TextAreaField(props: FieldProps & { readonly fieldKey: string; readonly label: string; readonly placeholder?: string; readonly rowsClassName: string; readonly secret?: boolean }) {
   return (
     <label className="block">
       <span className="text-sm font-medium text-ink">{props.label}</span>
       <textarea className={`mt-2 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink ${props.rowsClassName}`} onChange={(event) => props.onChange(props.fieldKey, event.target.value)} placeholder={props.placeholder} value={props.values[props.fieldKey] ?? ''} />
-      {props.placeholder ? <span className="mt-1 block text-xs text-slate-500">敏感值不会从服务器回显；留空保存会保持现有值。</span> : null}
+      {props.secret ? <span className="mt-1 block text-xs text-slate-500">敏感值不会从服务器回显；留空保存会保持现有值。</span> : null}
     </label>
   );
 }

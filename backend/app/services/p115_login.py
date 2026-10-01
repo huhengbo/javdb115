@@ -23,6 +23,12 @@ LOGIN_DEVICES = (
 )
 
 
+def qrcode_app(device: str) -> str:
+    # 二维码按所选设备申请，115 App 扫码确认页才会显示对应设备而不是网页端；
+    # 115 浏览器没有独立的二维码接口，与 p115client 换取 cookie 时一样归到 web
+    return "web" if device == "desktop" else device
+
+
 @dataclass(frozen=True)
 class QrLoginSession:
     session_id: str
@@ -43,7 +49,8 @@ class P115QrLoginManager:
 
     def start(self, device: str) -> QrLoginSession:
         self._validate_device(device)
-        token = self._qrcode_token()
+        app = qrcode_app(device)
+        token = self._qrcode_token(app)
         data = self._response_data(token)
         uid = str(data.get("uid") or "")
         if not uid:
@@ -53,7 +60,7 @@ class P115QrLoginManager:
             device=device,
             token=data,
             uid=uid,
-            qrcode_url=f"{QR_BASE_URL}/api/1.0/web/1.0/qrcode?uid={uid}",
+            qrcode_url=f"{QR_BASE_URL}/api/1.0/{app}/1.0/qrcode?uid={uid}",
             expires_at=(now_utc() + timedelta(seconds=QR_TTL_SECONDS)).isoformat(),
         )
         with self._lock:
@@ -115,11 +122,11 @@ class P115QrLoginManager:
         if device not in {str(item["value"]) for item in LOGIN_DEVICES}:
             raise ValidationAppError(f"Unsupported 115 login device: {device}")
 
-    def _qrcode_token(self) -> dict[str, Any]:
+    def _qrcode_token(self, app: str) -> dict[str, Any]:
         try:
             from p115client import P115Client
 
-            return P115Client.login_qrcode_token()
+            return P115Client.login_qrcode_token(app=app)
         except Exception as exc:
             raise IntegrationError(f"115 QR login token failed: {exc}") from exc
 

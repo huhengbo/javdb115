@@ -12,8 +12,11 @@ from app.services.p115_login import P115QrLoginManager
 
 
 class FakeP115Client:
-    @staticmethod
-    def login_qrcode_token() -> dict[str, Any]:
+    token_apps: list[str] = []
+
+    @classmethod
+    def login_qrcode_token(cls, app: str = "web") -> dict[str, Any]:
+        cls.token_apps.append(app)
         return {"state": True, "data": {"uid": "qr-uid", "time": 1, "sign": "sig"}}
 
     @staticmethod
@@ -45,9 +48,13 @@ def test_qrcode_login_saves_cookie_after_scan(
     monkeypatch.setattr("p115client.P115Client", FakeP115Client)
     monkeypatch.setattr("app.services.p115_login.P115CloudClient", FakeCloudClient)
 
+    FakeP115Client.token_apps = []
     session = manager.start("alipaymini")
     result = manager.status(session.session_id, SettingsRepository(connection))
 
+    # 二维码与换取 cookie 都绑定所选设备，扫码确认页才不会显示为网页端
+    assert FakeP115Client.token_apps == ["alipaymini"]
+    assert session.qrcode_url == "https://qrcodeapi.115.com/api/1.0/alipaymini/1.0/qrcode?uid=qr-uid"
     assert result["status"] == "succeeded"
     assert result["account"] == {
         "user_id": "1",
@@ -80,6 +87,17 @@ def test_qrcode_long_poll_timeout_keeps_waiting(
     result = manager.status(session.session_id, SettingsRepository(connection))
 
     assert result["status"] == "waiting"
+
+
+def test_desktop_qrcode_uses_web_app(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("p115client.P115Client", FakeP115Client)
+    FakeP115Client.token_apps = []
+
+    session = P115QrLoginManager().start("desktop")
+
+    assert FakeP115Client.token_apps == ["web"]
+    assert "/api/1.0/web/1.0/qrcode" in session.qrcode_url
+    assert session.device == "desktop"
 
 
 def setup_database(tmp_path: Path) -> Database:
