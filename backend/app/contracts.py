@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import BaseModel, BeforeValidator, Field
+
+# JavDB 原始数据中缺失的字段是 null（如无头像演员的 avatar_url），前端原样透传
+OptionalText = Annotated[str, BeforeValidator(lambda value: "" if value is None else value)]
 
 
 class LoginRequest(BaseModel):
@@ -140,22 +145,22 @@ class FollowUpdate(BaseModel):
 
 
 class ManualOfflineActorInput(BaseModel):
-    id: str = ""
-    name: str
-    avatar_url: str = ""
+    id: OptionalText = ""
+    name: OptionalText = ""
+    avatar_url: OptionalText = ""
 
 
 class ManualOfflineWorkInput(BaseModel):
     code: str
-    title: str
-    cover_url: str = ""
-    release_date: str = ""
+    title: OptionalText = ""
+    cover_url: OptionalText = ""
+    release_date: OptionalText = ""
     actors: list[ManualOfflineActorInput] = Field(default_factory=list)
 
 
 class ManualOfflineMagnetInput(BaseModel):
     hash: str
-    name: str
+    name: OptionalText = ""
     size_mb: float | None = None
 
 
