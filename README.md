@@ -135,10 +135,12 @@ docker compose logs -f
 - 磁力筛选规则。
 - Telegram Bot Token 与 Chat ID。
 
-115 Cookie 和 Telegram Bot Token 属于敏感设置。API 不会回显原值；Web 表单留空保存表示保持原值，只有重新输入时才会覆盖。敏感值会使用由 `APP_SECRET_KEY` 派生的密钥通过 AES-GCM 认证加密后保存到 SQLite；升级旧数据库时会在启动阶段自动把已知明文敏感值迁移为密文。
+Telegram Bot Token 和 JavDB 登录令牌属于敏感设置。API 不会回显原值；Web 表单留空保存表示保持原值，只有重新输入时才会覆盖。敏感值会使用由 `APP_SECRET_KEY` 派生的密钥通过 AES-GCM 认证加密后保存到 SQLite；升级旧数据库时会在启动阶段自动把已知明文敏感值迁移为密文。
+
+115 Cookie 为便于查看和复制，在设置页明文回显并以明文保存到 SQLite；扫码登录成功后会自动填入。旧版本加密保存的 115 Cookie 会在启动时自动解密还原（需要原 `APP_SECRET_KEY`）。请把 `data/` 目录与数据库备份当作凭据妥善保管。
 
 > [!IMPORTANT]
-> 请把 `APP_SECRET_KEY` 与数据库备份作为同一套恢复材料长期保存。更换或丢失该密钥后，历史加密的 115 Cookie / Telegram Bot Token 将无法解密，需要重新录入。
+> 请把 `APP_SECRET_KEY` 与数据库备份作为同一套恢复材料长期保存。更换或丢失该密钥后，历史加密的 Telegram Bot Token / JavDB 登录令牌将无法解密，需要重新录入。
 
 ## 从旧容器升级
 
@@ -277,9 +279,9 @@ GitHub Actions 对 PR / `master` 自动执行：
 
 - 浏览器登录使用 `HttpOnly`、`SameSite=Lax` Session Cookie，不再把 Session Token 保存到 `localStorage`。
 - 登录连续失败会触发临时限流/锁定。
-- 115 Cookie 和 Telegram Bot Token 不通过设置 API 回显。
+- Telegram Bot Token 和 JavDB 登录令牌不通过设置 API 回显；115 Cookie 按需求在已登录的设置页回显。
 - 敏感键由服务端固定 allowlist 判定，不信任前端传入的 `is_secret`。
-- 115 Cookie 与 Telegram Bot Token 在 SQLite 中使用 AES-GCM 认证加密保存。
+- Telegram Bot Token 与 JavDB 登录令牌在 SQLite 中使用 AES-GCM 认证加密保存；115 Cookie 明文保存。
 - Docker 运行进程为非 root，并启用 `no-new-privileges`。
 
 > [!WARNING]

@@ -3,10 +3,16 @@ from __future__ import annotations
 import os
 import sqlite3
 
-from app.secret_store import decrypt_secret, encrypt_secret, is_encrypted_secret
+from app.secret_store import (
+    SECRET_VALUE_PREFIX,
+    decrypt_secret,
+    encrypt_secret,
+    is_encrypted_secret,
+)
 from app.security import iso_now
 
-SECRET_KEYS = frozenset({"p115_cookie", "telegram_bot_token", "javdb_token"})
+# p115_cookie 需要在设置页回显，按普通设置明文保存
+SECRET_KEYS = frozenset({"telegram_bot_token", "javdb_token"})
 OBSOLETE_KEYS = {"javdb_base_url", "javdb_cookie"}
 
 
@@ -45,12 +51,32 @@ class SettingsRepository:
             if value and not is_encrypted_secret(value):
                 self._write(key, encrypt_secret(value, secret_key), True)
 
+    def decrypt_public_settings(self) -> None:
+        """把曾按密钥加密保存、现已改为明文的设置（如旧版 p115_cookie）还原为明文。"""
+        placeholders = ", ".join("?" for _ in SECRET_KEYS)
+        rows = self.connection.execute(
+            f"""
+            SELECT key, value FROM settings
+            WHERE key NOT IN ({placeholders}) AND (is_secret = 1 OR value LIKE ?)
+            """,
+            (*sorted(SECRET_KEYS), f"{SECRET_VALUE_PREFIX}%"),
+        ).fetchall()
+        for row in rows:
+            key = str(row["key"])
+            value = str(row["value"])
+            if is_encrypted_secret(value):
+                secret_key = self._secret_key()
+                if not secret_key:
+                    continue
+                value = decrypt_secret(value, secret_key)
+            self._write(key, value, False)
+
     def get(self, key: str) -> str | None:
         row = self.connection.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
         if row is None:
             return None
         value = str(row["value"])
-        if not is_secret_key(key) or not is_encrypted_secret(value):
+        if not is_encrypted_secret(value):
             return value
         secret_key = self._secret_key()
         if not secret_key:

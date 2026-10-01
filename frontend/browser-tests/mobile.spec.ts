@@ -9,11 +9,13 @@ const topMovie = movie('top-1', 'TOP-001', 'TOP250 作品');
 let savedSettings: Array<{ key: string; value: string; is_secret: boolean }> = [];
 let javdbLoggedIn = false;
 let quickOfflineSubmissions: string[] = [];
+let p115Cookie = '';
 
 test.beforeEach(async ({ page }) => {
   savedSettings = [];
   javdbLoggedIn = false;
   quickOfflineSubmissions = [];
+  p115Cookie = 'UID=old_R2_1;CID=old;';
   await mockApi(page);
 });
 
@@ -71,6 +73,20 @@ test('settings preserve multiline filter drafts and save normalized values', asy
     min_size_gb: 2.5,
     required_keywords: ['中文字幕', '中文输入']
   });
+});
+
+test('settings echo the 115 cookie and refresh it after QR login', async ({ page }) => {
+  await page.goto('/settings');
+  const cookie = page.getByLabel('115 Cookie');
+  await expect(cookie).toHaveValue('UID=old_R2_1;CID=old;');
+
+  await page.getByRole('button', { name: '生成二维码' }).click();
+  await page.getByRole('button', { name: '刷新状态' }).click();
+
+  await expect(page.getByText('Cookie 已写入')).toBeVisible();
+  // 扫码写入的新 Cookie 同步到表单且不算未保存修改，之后保存也不会用旧值覆盖
+  await expect(cookie).toHaveValue('UID=new_R2_2;CID=new;');
+  await expect(page.getByRole('button', { name: '保存', exact: true })).toHaveCount(0);
 });
 
 test('directory picker uses enter-then-confirm mobile flow', async ({ page }) => {
@@ -309,6 +325,13 @@ async function handleApi(route: Route) {
     savedSettings = JSON.parse(request.postData() ?? '{}').items ?? [];
     return json(route, { ok: true });
   }
+  if (path === '/api/settings/115/login/qrcode' && request.method() === 'POST') {
+    return json(route, { session_id: 'qr-1', device: 'alipaymini', qrcode_url: 'data:image/png;base64,', expires_at: '2099-01-01T00:00:00+00:00' });
+  }
+  if (path === '/api/settings/115/login/qrcode/qr-1') {
+    p115Cookie = 'UID=new_R2_2;CID=new;';
+    return json(route, { session_id: 'qr-1', status: 'succeeded', message: '115 登录成功', account: { user_id: '1', user_name: 'user' } });
+  }
   if (path === '/api/settings/115/login/devices') {
     return json(route, [{ value: 'alipaymini', label: '支付宝小程序', recommended: true }]);
   }
@@ -323,7 +346,7 @@ async function handleApi(route: Route) {
 
 function settingsFixture() {
   const values: Record<string, string> = {
-    p115_cookie: '',
+    p115_cookie: p115Cookie,
     telegram_bot_token: '',
     telegram_chat_id: '',
     check_cron: '0 */6 * * *',
@@ -340,7 +363,7 @@ function settingsFixture() {
     p115_completed_fc2_dir_id: '',
     p115_completed_fc2_dir_label: '',
   };
-  return Object.entries(values).map(([key, value]) => ({ key, value, is_secret: key === 'p115_cookie' || key === 'telegram_bot_token' }));
+  return Object.entries(values).map(([key, value]) => ({ key, value, is_secret: key === 'telegram_bot_token' }));
 }
 
 function movie(id: string, number: string, title: string) {

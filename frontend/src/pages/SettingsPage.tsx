@@ -53,7 +53,7 @@ const categoryCompletedDirectories = [
 const telegramConnectionKeys = ['telegram_bot_token'] as const;
 
 const settingKeys = [
-  ['p115_cookie', '115 Cookie', true],
+  ['p115_cookie', '115 Cookie', false],
   ['telegram_bot_token', 'Telegram Bot Token', true],
   ['telegram_chat_id', 'Telegram Chat ID（可空）', false],
   ['check_cron', '检查 Cron', false],
@@ -163,9 +163,17 @@ function useSettingsForm() {
     setError(null);
   }
 
-  function onP115LoginSuccess() {
+  async function onP115LoginSuccess() {
     setMessage('115 扫码登录成功');
     setDirectoryReloadKey((current) => current + 1);
+    // 扫码已在服务端写入新 Cookie，同步到表单，避免之后保存时用旧值覆盖
+    try {
+      const cookie = mapSettings(await client.settings()).p115_cookie ?? '';
+      setValues((current) => ({ ...current, p115_cookie: cookie }));
+      setSavedValues((current) => ({ ...current, p115_cookie: cookie }));
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   function setValue(key: string, value: string) {

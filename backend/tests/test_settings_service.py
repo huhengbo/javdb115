@@ -33,16 +33,25 @@ def test_public_settings_include_defaults_and_hide_obsolete_keys(tmp_path: Path)
     assert "javdb_cookie" not in settings
 
 
-def test_public_settings_hide_p115_cookie_and_report_configured(tmp_path: Path) -> None:
+def test_public_settings_echo_p115_cookie(tmp_path: Path) -> None:
+    connection = setup_database(tmp_path).connect()
+    repository = SettingsRepository(connection)
+    repository.upsert("p115_cookie", "UID=abc;", True)
+
+    settings = by_key(SettingsService(repository).list_public())
+
+    assert settings["p115_cookie"]["value"] == "UID=abc;"
+    assert settings["p115_cookie"]["is_secret"] is False
+
+
+def test_blank_p115_cookie_update_clears_value(tmp_path: Path) -> None:
     connection = setup_database(tmp_path).connect()
     repository = SettingsRepository(connection)
     repository.upsert("p115_cookie", "UID=abc;", False)
 
-    settings = by_key(SettingsService(repository).list_public())
+    SettingsService(repository).update([("p115_cookie", "", True)])
 
-    assert settings["p115_cookie"]["value"] is None
-    assert settings["p115_cookie"]["configured"] is True
-    assert settings["p115_cookie"]["is_secret"] is True
+    assert repository.get("p115_cookie") == ""
 
 
 def test_public_settings_hide_javdb_token_and_report_configured(tmp_path: Path) -> None:

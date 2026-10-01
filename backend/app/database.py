@@ -31,6 +31,7 @@ class Database:
             settings = SettingsRepository(connection)
             settings.delete_obsolete()
             settings.encrypt_plaintext_secrets()
+            settings.decrypt_public_settings()
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
