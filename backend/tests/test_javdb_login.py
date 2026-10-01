@@ -8,7 +8,7 @@ import pytest
 
 from app.adapters.javdb_api import JavdbApiClient, make_request_headers
 from app.database import Database
-from app.errors import IntegrationError, ValidationAppError
+from app.errors import ValidationAppError
 from app.repositories.settings import SettingsRepository
 from app.secret_store import SECRET_VALUE_PREFIX
 from app.services.javdb_login import JAVDB_DEVICE_UUID_KEY, JAVDB_TOKEN_KEY, JavdbLoginService
@@ -131,7 +131,7 @@ def test_failed_login_does_not_store_token(tmp_path: Path) -> None:
         JavdbApiClient(cast(Any, transport)),
     )
 
-    with pytest.raises(IntegrationError, match="用户名或密码错误"):
+    with pytest.raises(ValidationAppError, match="用户名或密码错误"):
         service.login("user", "wrong")
     assert SettingsRepository(connection).get(JAVDB_TOKEN_KEY) is None
 

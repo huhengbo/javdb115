@@ -158,6 +158,9 @@ class P115QrLoginManager:
     def _status_code(self, response: dict[str, Any]) -> int:
         data = self._response_data(response)
         status = data.get("status")
+        # 状态接口是长轮询，约 30 秒内无变化时返回空 data，等同于继续等待扫码
+        if status is None and not data:
+            return 0
         if status is None:
             raise IntegrationError("115 QR login response did not include status")
         return int(status)

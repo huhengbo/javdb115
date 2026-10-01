@@ -16,7 +16,7 @@ from app.adapters.javdb.authed import JavdbAuthedApi
 from app.adapters.javdb.catalog import JavdbCatalogApi
 from app.adapters.javdb.media import resolve_image_url
 from app.adapters.javdb.query import query_string
-from app.errors import IntegrationError
+from app.errors import IntegrationError, ValidationAppError
 
 PART1 = (
     "71cf27bb3c0bcdf207b64abecddc970098c7421ee7203b9cdae54478478a199e"
@@ -322,24 +322,25 @@ class JavdbApiClient(JavdbCatalogApi):
         device_model: str = LOGIN_DEVICE_MODEL,
         system_version: str = LOGIN_SYSTEM_VERSION,
     ) -> dict[str, Any]:
-        payload = self._require_success(
-            self._post(
-                SESSIONS_PATH,
-                {
-                    "username": username,
-                    "password": password,
-                    "device_uuid": device_uuid,
-                    "device_name": device_name,
-                    "device_model": device_model,
-                    "system_version": system_version,
-                    "platform": "android",
-                    "app_channel": "official",
-                    "app_version": "official",
-                    "app_version_number": "1.9.35",
-                },
-            ),
-            "JavDB 登录失败",
+        payload = self._post(
+            SESSIONS_PATH,
+            {
+                "username": username,
+                "password": password,
+                "device_uuid": device_uuid,
+                "device_name": device_name,
+                "device_model": device_model,
+                "system_version": system_version,
+                "platform": "android",
+                "app_channel": "official",
+                "app_version": "official",
+                "app_version_number": "1.9.35",
+            },
         )
+        if payload.get("success") == 0:
+            # 账号或密码被 JavDB 拒绝是用户输入问题，不能用 502：Cloudflare 会吞掉 502 响应体
+            message = payload.get("message") or payload.get("action") or "JavDB 登录失败"
+            raise ValidationAppError(str(message))
         data = self._dict_value(payload, "data")
         token = data.get("token")
         if not isinstance(token, str) or not token.strip():

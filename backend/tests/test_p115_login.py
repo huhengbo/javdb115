@@ -61,6 +61,27 @@ def test_qrcode_login_saves_cookie_after_scan(
     assert SettingsRepository(connection).get("p115_cookie") == "UID=abc;"
 
 
+def test_qrcode_long_poll_timeout_keeps_waiting(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    connection = setup_database(tmp_path).connect()
+    manager = P115QrLoginManager()
+
+    class TimeoutP115Client(FakeP115Client):
+        @staticmethod
+        def login_qrcode_scan_status(payload: dict[str, Any]) -> dict[str, Any]:
+            # 115 长轮询超时且无人扫码时的真实响应
+            return {"state": 1, "code": 0, "message": "", "data": {}}
+
+    monkeypatch.setattr("p115client.P115Client", TimeoutP115Client)
+
+    session = manager.start("alipaymini")
+    result = manager.status(session.session_id, SettingsRepository(connection))
+
+    assert result["status"] == "waiting"
+
+
 def setup_database(tmp_path: Path) -> Database:
     database = Database(tmp_path / "test.sqlite3")
     database.initialize()
